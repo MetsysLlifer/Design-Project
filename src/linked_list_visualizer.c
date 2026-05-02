@@ -72,6 +72,11 @@ static char posBuf[8] = "1";
 static char delValBuf[8] = "10";
 static char delPosBuf[8] = "1";
 
+static bool valEditMode = false;
+static bool posEditMode = false;
+static bool delValEditMode = false;
+static bool delPosEditMode = false;
+
 static Vector2 FindSpawnPosition(Vector2 basePos);
 static void RemoveVisualNode(int address);
 
@@ -835,11 +840,17 @@ void LinkedListVisualizer_DrawUI(void) {
         if (context.type == FUNC_INSERT) {
             DrawText("INSERT(List, val, pos)", paramBox.x + 60, paramBox.y + 20, 15, BLACK);
             DrawText("Value:", paramBox.x + 30, paramBox.y + 70, 12, BLACK);
-            GuiTextBox((Rectangle){paramBox.x + 120, paramBox.y + 65, 160, 30}, valBuf, 8, true);
+            if (GuiTextBox((Rectangle){paramBox.x + 120, paramBox.y + 65, 160, 30}, valBuf, 8, valEditMode)) {
+                valEditMode = !valEditMode;
+                posEditMode = false;
+            }
 
             if (context.insertMode == INSERT_INDEX) {
                 DrawText("Position:", paramBox.x + 30, paramBox.y + 110, 12, BLACK);
-                GuiTextBox((Rectangle){paramBox.x + 120, paramBox.y + 105, 160, 30}, posBuf, 8, true);
+                if (GuiTextBox((Rectangle){paramBox.x + 120, paramBox.y + 105, 160, 30}, posBuf, 8, posEditMode)) {
+                    posEditMode = !posEditMode;
+                    valEditMode = false;
+                }
             }
 
             if (GuiButton((Rectangle){paramBox.x + 120, paramBox.y + 160, 100, 35}, "START")) {
@@ -857,6 +868,8 @@ void LinkedListVisualizer_DrawUI(void) {
                         return;
                     }
                 }
+                valEditMode = false;
+                posEditMode = false;
                 ResetTraversal();
                 context.currentLine = 0;
                 context.totalLines = 12;
@@ -867,10 +880,16 @@ void LinkedListVisualizer_DrawUI(void) {
 
             if (context.deleteMode == DELETE_INDEX) {
                 DrawText("Index:", paramBox.x + 30, paramBox.y + 80, 12, BLACK);
-                GuiTextBox((Rectangle){paramBox.x + 120, paramBox.y + 75, 160, 30}, delPosBuf, 8, true);
+                if (GuiTextBox((Rectangle){paramBox.x + 120, paramBox.y + 75, 160, 30}, delPosBuf, 8, delPosEditMode)) {
+                    delPosEditMode = !delPosEditMode;
+                    delValEditMode = false;
+                }
             } else if (context.deleteMode == DELETE_ELEMENT) {
                 DrawText("Value:", paramBox.x + 30, paramBox.y + 80, 12, BLACK);
-                GuiTextBox((Rectangle){paramBox.x + 120, paramBox.y + 75, 160, 30}, delValBuf, 8, true);
+                if (GuiTextBox((Rectangle){paramBox.x + 120, paramBox.y + 75, 160, 30}, delValBuf, 8, delValEditMode)) {
+                    delValEditMode = !delValEditMode;
+                    delPosEditMode = false;
+                }
             } else {
                 DrawText("No extra input required.", paramBox.x + 70, paramBox.y + 90, 12, DARKGRAY);
             }
@@ -881,6 +900,8 @@ void LinkedListVisualizer_DrawUI(void) {
                 } else if (context.deleteMode == DELETE_ELEMENT) {
                     context.targetVal = atoi(delValBuf);
                 }
+                delValEditMode = false;
+                delPosEditMode = false;
                 StartDeleteExecution();
                 if (!showError) {
                     context.currentLine = 0;
