@@ -47,12 +47,14 @@ void MemoryManager_Draw(Rectangle area, int travAddress) {
     const int fontSize = 11;
     int visibleNodes = (int)(area.height / cellHeight);
     
-    DrawRectangleRec(area, RAYWHITE);
-    DrawRectangleLinesEx(area, 2, BLACK);
+    // HEAP THEME (GREEN)
+    DrawRectangleRec(area, (Color){ 245, 255, 245, 255 });
+    DrawRectangleLinesEx(area, 2, DARKGREEN);
+    DrawText("THE HEAP (Dynamic Memory)", area.x, area.y - 20, 14, DARKGREEN);
 
     for (int i = 0; i < visibleNodes && i < MAX_MEM_NODES; i++) {
         Rectangle cell = { area.x, area.y + i * cellHeight, area.width, cellHeight };
-        DrawRectangleLinesEx(cell, 1, BLACK);
+        DrawRectangleLinesEx(cell, 1, (Color){ 0, 100, 0, 50 });
 
         float textX = cell.x + 5;
         float textY = cell.y + (cellHeight - (float)fontSize) / 2.0f;
@@ -62,14 +64,14 @@ void MemoryManager_Draw(Rectangle area, int travAddress) {
         }
         
         if (heap[i].status == MEM_ALLOCATED) {
-            DrawRectangleRec(cell, (Color){ 0, 0, 0, 10 });
+            DrawRectangleRec(cell, (Color){ 0, 255, 0, 20 }); // Light green tint
             char text[48];
             sprintf(text, "0x%X: [%d | 0x%X]", heap[i].address, heap[i].value, heap[i].next_address);
-            DrawText(text, textX, textY, fontSize, BLACK);
+            DrawText(text, textX, textY, fontSize, DARKGREEN);
         } else {
             char addr[16];
             sprintf(addr, "0x%X", heap[i].address);
-            DrawText(addr, textX, textY, fontSize, LIGHTGRAY);
+            DrawText(addr, textX, textY, fontSize, (Color){ 180, 210, 180, 255 });
         }
     }
 }

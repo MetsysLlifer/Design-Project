@@ -51,15 +51,15 @@ static const char* deletePseudocode[] = {
 };
 
 static void DrawPseudocode(int x, int y, const char** lines, int count, int currentLine) {
-    Rectangle bg = { (float)x - 10, (float)y - 10, 300, (float)count * 20 + 20 };
-    DrawRectangleRec(bg, (Color){ 240, 240, 240, 255 });
-    DrawRectangleLinesEx(bg, 1, DARKGRAY);
-    DrawText("ALGORITHM PSEUDOCODE", x, y - 25, 12, DARKGRAY);
+    Rectangle bg = { (float)x - 10, (float)y - 10, 320, (float)count * 20 + 20 };
+    DrawRectangleRec(bg, (Color){ 235, 245, 255, 255 }); // Very light blue
+    DrawRectangleLinesEx(bg, 1, DARKBLUE);
+    DrawText("ALGORITHM (INSTRUCTION SET)", x, y - 25, 12, DARKBLUE);
 
     for (int i = 0; i < count; i++) {
-        Color textColor = BLACK;
+        Color textColor = (Color){ 30, 60, 90, 255 };
         if (i == currentLine) {
-            DrawRectangle(x - 5, y + i * 20, 290, 18, (Color){ 255, 255, 0, 150 });
+            DrawRectangle(x - 5, y + i * 20, 310, 18, (Color){ 255, 255, 0, 150 });
             textColor = RED;
         }
         DrawText(lines[i], x, y + i * 20, 15, textColor);
@@ -91,6 +91,7 @@ void LinkedListVisualizer_Init(void) {
     context.newNodeAddress = 0;
     context.currentLine = 0;
     context.totalLines = 0;
+    context.lineProgress = 1.0f;
     showError = false;
 }
 
@@ -563,19 +564,19 @@ void LinkedListVisualizer_Draw(void) {
         VisualNode* vn = &visualNodes[i];
         Rectangle rec = { vn->position.x, vn->position.y, 100, 50 };
         
-        Color bgColor = WHITE;
+        Color bgColor = (Color){ 245, 255, 245, 255 }; // Light green tint for Heap objects
         if (vn->address == context.newNodeAddress) bgColor = (Color){ 200, 255, 200, 255 };
         if (vn->address == context.toDeleteAddress) bgColor = (Color){ 255, 200, 200, 255 };
         if (vn->address == curr_address) bgColor = (Color){ 255, 255, 200, 255 };
 
         DrawRectangleRec(rec, bgColor);
-        DrawRectangleLinesEx(rec, 1, BLACK);
-        DrawLineEx((Vector2){ vn->position.x + 50, vn->position.y }, (Vector2){ vn->position.x + 50, vn->position.y + 50 }, 1, BLACK);
+        DrawRectangleLinesEx(rec, 2, DARKGREEN); // Heap object border
+        DrawLineEx((Vector2){ vn->position.x + 50, vn->position.y }, (Vector2){ vn->position.x + 50, vn->position.y + 50 }, 1, DARKGREEN);
         char val[4]; sprintf(val, "%d", (int)vn->data);
-        DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, BLACK);
-        DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, BLACK);
+        DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, DARKGREEN);
+        DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, DARKGREEN);
         char addr[16]; sprintf(addr, "0x%X", vn->address);
-        DrawText(addr, vn->position.x, vn->position.y - 12, 10, DARKGRAY);
+        DrawText(addr, vn->position.x, vn->position.y - 12, 10, DARKGREEN);
     }
 
     // 2. Draw Connections on top
@@ -658,16 +659,13 @@ void LinkedListVisualizer_DrawUI(void) {
     int sw = GetScreenWidth();
     int sh = GetScreenHeight();
 
-    // 1. THE STACK (Fixed Left Center)
-    Rectangle stackBox = { 20, (float)sh/2 - 120, 240, 220 };
-    DrawRectangleRec(stackBox, WHITE);
-    DrawRectangleLinesEx(stackBox, 2, BLACK);
-    DrawText("Stack Memory", stackBox.x + 10, stackBox.y + 10, 13, BLACK);
-
+    // 0. THE EXECUTOR (CPU) - Moved below back button
+    Rectangle cpuBox = { 20, 60, 240, 70 };
+    DrawRectangleRec(cpuBox, (Color){ 230, 240, 255, 255 }); // Cool Blue
+    DrawRectangleLinesEx(cpuBox, 2, DARKBLUE);
+    DrawText("THE EXECUTOR", cpuBox.x + 10, cpuBox.y + 10, 14, DARKBLUE);
+    
     if (simStatus == SIM_EXECUTING) {
-        Rectangle execBox = { stackBox.x + 20, stackBox.y + 10, stackBox.width - 40, 25 };
-        DrawRectangleRec(execBox, LIGHTGRAY);
-        DrawRectangleLinesEx(execBox, 1, BLACK);
         char func[64];
         if (context.type == FUNC_INSERT) {
             sprintf(func, "INSERT(List, %d, %d)", context.targetVal, context.targetPos);
@@ -676,18 +674,33 @@ void LinkedListVisualizer_DrawUI(void) {
         } else {
             sprintf(func, "FUNC(List)");
         }
-        DrawText(func, execBox.x + 10, execBox.y + 6, 12, BLACK);
+        DrawText(func, cpuBox.x + 20, cpuBox.y + 35, 12, DARKBLUE);
+        
+        char pcTxt[32]; sprintf(pcTxt, "PC: 0x%X", 0x800 + (context.currentLine * 4));
+        DrawText(pcTxt, cpuBox.x + 20, cpuBox.y + 50, 11, BLUE);
+
+        // Execution Path Arrow (CPU -> Pseudocode)
+        Vector2 cpuRight = { cpuBox.x + cpuBox.width, cpuBox.y + cpuBox.height / 2.0f };
+        Vector2 codeLeft = { (float)sw - 580, 60.0f + (context.currentLine * 20) };
+        DrawStraightArrow(cpuRight, codeLeft, BLUE, 1.0f);
+    } else {
+        DrawText("PC: IDLE", cpuBox.x + 20, cpuBox.y + 35, 12, BLUE);
     }
 
-    Rectangle listBox = { stackBox.x + 40, stackBox.y + 140, 160, 35 };
+    // 1. THE STACK (Warm Orange) - Left Center
+    Rectangle stackBox = { 20, (float)sh/2 - 80, 240, 190 };
+    DrawRectangleRec(stackBox, (Color){ 255, 245, 230, 255 });
+    DrawRectangleLinesEx(stackBox, 2, (Color){ 255, 161, 0, 255 });
+    DrawText("THE STACK", stackBox.x + 10, stackBox.y + 10, 14, (Color){ 200, 100, 0, 255 });
+
+    Rectangle listBox = { stackBox.x + 40, stackBox.y + 100, 160, 35 };
     DrawRectangleRec(listBox, WHITE);
     DrawRectangleLinesEx(listBox, 1, BLACK);
-    DrawText("List", listBox.x + 55, listBox.y + 10, 13, BLACK);
+    DrawText("List (ptr)", listBox.x + 55, listBox.y + 10, 13, BLACK);
 
     VisualNode* headNode = GetVisualNode(head_address);
     if (headNode) {
         float listProg = 1.0f;
-        // Animate List pointer if line 4 (Insert First) or line 3 (Delete First)
         if (simStatus == SIM_EXECUTING) {
             if (context.type == FUNC_INSERT && context.currentLine == 4) listProg = context.lineProgress;
             if (context.type == FUNC_DELETE && context.currentLine == 3) listProg = context.lineProgress;
@@ -701,17 +714,13 @@ void LinkedListVisualizer_DrawUI(void) {
     }
 
     if (simStatus == SIM_EXECUTING) {
-        // Consolidated traverse logic
         Rectangle travBox = { stackBox.x + 20, stackBox.y + 40, 85, 24 };
-        
-        // Traverse should only show if we are in a branch that uses it (currentLine >= 6)
         bool showTrav = false;
         if (context.type == FUNC_INSERT && context.currentLine >= 6) showTrav = true;
         if (context.type == FUNC_DELETE && context.currentLine >= 6) showTrav = true;
 
         if (showTrav) {
             float travProg = 1.0f;
-            // Animate traverse growth during 'prev = head' (line 6) or 'prev = prev->next' (line 8)
             if (context.currentLine == 6 || context.currentLine == 8) travProg = context.lineProgress;
 
             if (curr_address != 0) {
@@ -723,7 +732,6 @@ void LinkedListVisualizer_DrawUI(void) {
                     DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, isNull, travProg);
                 }
             } else {
-                // Point to the List box if traversal just started but curr_address is not yet updated
                 Vector2 listCenter = { listBox.x + listBox.width / 2.0f, listBox.y + listBox.height / 2.0f };
                 DrawStackPointerBox("traverse", travBox, listCenter, (Color){ 255, 0, 110, 255 }, false, travProg);
             }
@@ -731,16 +739,16 @@ void LinkedListVisualizer_DrawUI(void) {
     }
 
     char listTxt[32]; sprintf(listTxt, "List: 0x%X", head_address);
-    DrawText(listTxt, stackBox.x + 20, stackBox.y + 115, 13, BLACK);
+    DrawText(listTxt, stackBox.x + 20, stackBox.y + 75, 13, (Color){ 150, 80, 0, 255 });
     char currTxt[32]; sprintf(currTxt, "curr: 0x%X", curr_address);
-    DrawText(currTxt, stackBox.x + 20, stackBox.y + 185, 13, BLACK);
+    DrawText(currTxt, stackBox.x + 20, stackBox.y + 145, 13, (Color){ 150, 80, 0, 255 });
 
-    // Pseudocode Display
+    // Pseudocode Display - Upper left of memory
     if (simStatus == SIM_EXECUTING) {
         if (context.type == FUNC_INSERT) {
-            DrawPseudocode(sw - 320, 100, insertPseudocode, 12, context.currentLine);
+            DrawPseudocode(sw - 580, 60, insertPseudocode, 12, context.currentLine);
         } else if (context.type == FUNC_DELETE) {
-            DrawPseudocode(sw - 320, 100, deletePseudocode, 13, context.currentLine);
+            DrawPseudocode(sw - 580, 60, deletePseudocode, 13, context.currentLine);
         }
     }
 
