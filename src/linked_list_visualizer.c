@@ -3,6 +3,7 @@
 #include "rlgl.h"
 #include "raymath.h"
 #include "raygui.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -10,6 +11,8 @@ static int head_address = 0;
 static int curr_address = 0;
 static VisualNode visualNodes[MAX_MEM_NODES];
 static int visualNodeCount = 0;
+static Vector2 spawnCenter = { 0, 0 };
+static Camera2D viewCamera = { 0 };
 
 static SimStatus simStatus = SIM_IDLE;
 static SimContext context = { FUNC_NONE, 0, 0, 0, INSERT_INDEX, DELETE_INDEX, DEL_STEP_TRAVERSE, 0, 0 };
@@ -22,11 +25,15 @@ static char posBuf[8] = "1";
 static char delValBuf[8] = "10";
 static char delPosBuf[8] = "1";
 
+static Vector2 FindSpawnPosition(Vector2 basePos);
+
 void LinkedListVisualizer_Init(void) {
     MemoryManager_Init();
     head_address = 0;
     curr_address = 0;
     visualNodeCount = 0;
+    spawnCenter = (Vector2){ 0, 0 };
+    viewCamera = (Camera2D){ 0 };
     simStatus = SIM_IDLE;
     context.type = FUNC_NONE;
     context.insertMode = INSERT_INDEX;
@@ -47,6 +54,18 @@ static int GetListLength(void) {
         current = node->next_address;
     }
     return length;
+}
+
+static int GetTailAddress(void) {
+    int current = head_address;
+    int last = 0;
+    while (current != 0) {
+        MemoryNode* node = MemoryManager_GetNode(current);
+        if (!node) break;
+        last = current;
+        current = node->next_address;
+    }
+    return last;
 }
 
 static void ResetTraversal(void) {
@@ -106,12 +125,20 @@ static void PerformInsert(void) {
 
     // Visual Mapping
     visualNodes[visualNodeCount].address = new_addr;
-    visualNodes[visualNodeCount].position = (Vector2){ 200, 0 }; // Default offset, user can drag
+    visualNodes[visualNodeCount].position = FindSpawnPosition(spawnCenter);
     visualNodes[visualNodeCount].data = (char)context.targetVal;
     visualNodeCount++;
 
     simStatus = SIM_IDLE;
     context.type = FUNC_NONE;
+}
+
+void LinkedListVisualizer_SetSpawnCenter(Vector2 center) {
+    spawnCenter = center;
+}
+
+void LinkedListVisualizer_SetCamera(Camera2D cam) {
+    viewCamera = cam;
 }
 
 void LinkedListVisualizer_TraverseStep(void) {
@@ -288,22 +315,111 @@ static void Delete_Free(void) {
     ResetTraversal();
 }
 
-static void DrawOrthogonalArrow(Vector2 start, Vector2 end, Color color) {
-    Vector2 mid = { (start.x + end.x) / 2, start.y };
-    Vector2 mid2 = { (start.x + end.x) / 2, end.y };
-    DrawLineEx(start, mid, 2, color);
-    DrawLineEx(mid, mid2, 2, color);
-    DrawLineEx(mid2, end, 2, color);
-    DrawTriangle(end, (Vector2){ end.x - 10, end.y - 5 }, (Vector2){ end.x - 10, end.y + 5 }, color);
+static bool IsNodeOverlap(Rectangle candidate) {
+    for (int i = 0; i < visualNodeCount; i++) {
+        Rectangle existing = { visualNodes[i].position.x - 10, visualNodes[i].position.y - 10, 120, 70 };
+        if (CheckCollisionRecs(candidate, existing)) return true;
+    }
+    return false;
 }
 
-static void DrawTraversalPointer(VisualNode* vn) {
+static Vector2 FindSpawnPosition(Vector2 basePos) {
+    Rectangle candidate = { basePos.x - 10, basePos.y - 10, 120, 70 };
+    if (!IsNodeOverlap(candidate)) return basePos;
+
+    const float stepX = 130.0f;
+    const float stepY = 80.0f;
+    for (int ring = 1; ring < 7; ring++) {
+        for (int dx = -ring; dx <= ring; dx++) {
+            for (int dy = -ring; dy <= ring; dy++) {
+                if (abs(dx) != ring && abs(dy) != ring) continue;
+                Vector2 pos = { basePos.x + dx * stepX, basePos.y + dy * stepY };
+                candidate = (Rectangle){ pos.x - 10, pos.y - 10, 120, 70 };
+                if (!IsNodeOverlap(candidate)) return pos;
+            }
+        }
+    }
+    return basePos;
+}
+
+static Vector2 QuadraticBezier(Vector2 p0, Vector2 p1, Vector2 p2, float t) {
+    float u = 1.0f - t;
+    Vector2 a = Vector2Scale(p0, u * u);
+    Vector2 b = Vector2Scale(p1, 2.0f * u * t);
+    Vector2 c = Vector2Scale(p2, t * t);
+    return Vector2Add(Vector2Add(a, b), c);
+}
+
+static void DrawCurvedArrow(Vector2 start, Vector2 end, Color color) {
+    Vector2 control = { (start.x + end.x) / 2.0f, fminf(start.y, end.y) - 30.0f };
+    Vector2 prev = start;
+    for (int i = 1; i <= 20; i++) {
+        float t = (float)i / 20.0f;
+        Vector2 point = QuadraticBezier(start, control, end, t);
+        DrawLineEx(prev, point, 2.0f, color);
+        prev = point;
+    }
+
+    Vector2 dir = Vector2Normalize(Vector2Subtract(end, prev));
+    Vector2 left = Vector2Rotate(dir, 0.6f);
+    Vector2 right = Vector2Rotate(dir, -0.6f);
+    DrawTriangle(end, Vector2Subtract(end, Vector2Scale(left, 10.0f)), Vector2Subtract(end, Vector2Scale(right, 10.0f)), color);
+}
+
+static void DrawStraightArrow(Vector2 start, Vector2 end, Color color) {
+    DrawLineEx(start, end, 2.0f, color);
+    Vector2 dir = Vector2Normalize(Vector2Subtract(end, start));
+    Vector2 left = Vector2Rotate(dir, 0.6f);
+    Vector2 right = Vector2Rotate(dir, -0.6f);
+    DrawTriangle(end, Vector2Subtract(end, Vector2Scale(left, 10.0f)), Vector2Subtract(end, Vector2Scale(right, 10.0f)), color);
+}
+
+static Rectangle GetPointerFieldBox(VisualNode* vn) {
+    return (Rectangle){ vn->position.x + 58, vn->position.y + 15, 34, 20 };
+}
+
+static void DrawStackPointerBox(const char* label, Rectangle box, Vector2 tipPos, Color color, bool showNull) {
+    DrawRectangleRec(box, WHITE);
+    DrawRectangleLinesEx(box, 1, color);
+    DrawText(label, box.x + 6, box.y + 4, 12, color);
+    DrawStraightArrow((Vector2){ box.x + box.width, box.y + box.height / 2.0f }, tipPos, color);
+
+    if (showNull) {
+        Rectangle nullBox = { tipPos.x - 25, tipPos.y - 10, 50, 20 };
+        DrawRectangleRec(nullBox, (Color){ 10, 10, 10, 255 });
+        DrawRectangleLinesEx(nullBox, 1, (Color){ 200, 200, 200, 255 });
+        DrawText("NULL", nullBox.x + 8, nullBox.y + 4, 10, (Color){ 200, 200, 200, 255 });
+    }
+}
+
+static Vector2 GetPointerFieldCenterScreen(VisualNode* vn) {
+    Rectangle box = GetPointerFieldBox(vn);
+    Vector2 center = { box.x + box.width / 2.0f, box.y + box.height / 2.0f };
+    return GetWorldToScreen2D(center, viewCamera);
+}
+
+static Vector2 GetNodeLeftCenterScreen(VisualNode* vn) {
+    Vector2 leftCenter = { vn->position.x, vn->position.y + 25 };
+    return GetWorldToScreen2D(leftCenter, viewCamera);
+}
+
+static void DrawWorldTraverseBox(VisualNode* vn, bool pointToPointerField) {
     if (!vn) return;
-    Vector2 labelPos = { vn->position.x + 12, vn->position.y - 30 };
-    Vector2 tipPos = { vn->position.x + 25, vn->position.y };
-    DrawText("trav", labelPos.x, labelPos.y, 12, (Color){ 255, 0, 110, 255 });
-    DrawLineEx((Vector2){ labelPos.x + 10, labelPos.y + 18 }, tipPos, 2.0f, (Color){ 255, 0, 110, 255 });
-    DrawCircleV(tipPos, 3, (Color){ 255, 0, 110, 255 });
+    Rectangle box = { vn->position.x + 10, vn->position.y - 40, 90, 24 };
+    DrawRectangleRec(box, WHITE);
+    DrawRectangleLinesEx(box, 1, BLACK);
+    DrawText("Traverse", box.x + 8, box.y + 4, 12, BLACK);
+
+    Vector2 tipPos = pointToPointerField
+        ? (Vector2){ vn->position.x + 75, vn->position.y + 25 }
+        : (Vector2){ vn->position.x + 10, vn->position.y + 25 };
+    DrawStraightArrow((Vector2){ box.x + box.width / 2.0f, box.y + box.height }, tipPos, BLACK);
+
+    if (pointToPointerField) {
+        Rectangle pointerBox = GetPointerFieldBox(vn);
+        DrawRectangleLinesEx(pointerBox, 1, BLACK);
+        DrawText("NULL", pointerBox.x + 2, pointerBox.y + 4, 10, DARKGRAY);
+    }
 }
 
 void LinkedListVisualizer_Draw(void) {
@@ -315,9 +431,10 @@ void LinkedListVisualizer_Draw(void) {
         if (vn && node->next_address != 0) {
             VisualNode* nextVn = GetVisualNode(node->next_address);
             if (nextVn) {
-                Vector2 start = { vn->position.x + 75, vn->position.y + 25 };
+                Rectangle pointerBox = GetPointerFieldBox(vn);
+                Vector2 start = { pointerBox.x + pointerBox.width / 2.0f, pointerBox.y };
                 Vector2 end = { nextVn->position.x, nextVn->position.y + 25 };
-                DrawOrthogonalArrow(start, end, BLACK);
+                DrawCurvedArrow(start, end, BLACK);
             }
         }
         current = node->next_address;
@@ -341,13 +458,27 @@ void LinkedListVisualizer_Draw(void) {
         current = MemoryManager_GetNode(current)->next_address;
     }
 
-    if (curr_address != 0) {
-        DrawTraversalPointer(GetVisualNode(curr_address));
-    }
+    (void)0;
 }
 
 int LinkedListVisualizer_GetTraversalAddress(void) {
-    return curr_address;
+    if (simStatus != SIM_EXECUTING) return 0;
+    if (curr_address != 0) return curr_address;
+    return GetTailAddress();
+}
+
+bool LinkedListVisualizer_IsBusy(void) {
+    return simStatus != SIM_IDLE;
+}
+
+void LinkedListVisualizer_CancelInteraction(void) {
+    simStatus = SIM_IDLE;
+    context.type = FUNC_NONE;
+    context.deleteStep = DEL_STEP_TRAVERSE;
+    context.prevAddress = 0;
+    context.toDeleteAddress = 0;
+    showError = false;
+    ResetTraversal();
 }
 
 void LinkedListVisualizer_DrawUI(void) {
@@ -360,8 +491,42 @@ void LinkedListVisualizer_DrawUI(void) {
     DrawRectangleLinesEx(stackBox, 2, BLACK);
     DrawText("Stack Memory", stackBox.x + 10, stackBox.y + 10, 13, BLACK);
 
+    VisualNode* headNode = GetVisualNode(head_address);
+    Rectangle headBox = { stackBox.x + 20, stackBox.y + 45, 60, 24 };
+    if (headNode) {
+        Vector2 headTip = GetNodeLeftCenterScreen(headNode);
+        DrawStackPointerBox("head", headBox, headTip, (Color){ 0, 212, 255, 255 }, false);
+    } else {
+        Vector2 headTip = (Vector2){ headBox.x + 120, headBox.y + 12 };
+        DrawStackPointerBox("head", headBox, headTip, (Color){ 0, 212, 255, 255 }, true);
+    }
+
     if (simStatus == SIM_EXECUTING) {
-        DrawRectangle(stackBox.x, stackBox.y + 30, stackBox.width, 30, LIGHTGRAY);
+        Rectangle travBox = { stackBox.x + 20, stackBox.y - 35, 85, 24 };
+        if (curr_address != 0) {
+            VisualNode* travNode = GetVisualNode(curr_address);
+            if (travNode) {
+                MemoryNode* travMem = MemoryManager_GetNode(curr_address);
+                bool isNull = (travMem && travMem->next_address == 0);
+                Vector2 travTip = isNull ? GetPointerFieldCenterScreen(travNode) : GetNodeLeftCenterScreen(travNode);
+                DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, isNull);
+            }
+        } else {
+            VisualNode* tail = GetVisualNode(GetTailAddress());
+            if (tail) {
+                Vector2 travTip = GetPointerFieldCenterScreen(tail);
+                DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, true);
+            } else {
+                Vector2 travTip = (Vector2){ travBox.x + 150, travBox.y + 12 };
+                DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, true);
+            }
+        }
+    }
+
+    if (simStatus == SIM_EXECUTING) {
+        Rectangle execBox = { stackBox.x + 20, stackBox.y - 40, stackBox.width - 40, 30 };
+        DrawRectangleRec(execBox, LIGHTGRAY);
+        DrawRectangleLinesEx(execBox, 1, BLACK);
         char func[64];
         if (context.type == FUNC_INSERT) {
             sprintf(func, "INSERT(List, %d, %d)", context.targetVal, context.targetPos);
@@ -370,13 +535,35 @@ void LinkedListVisualizer_DrawUI(void) {
         } else {
             sprintf(func, "FUNC(List)");
         }
-        DrawText(func, stackBox.x + 10, stackBox.y + 38, 12, BLACK);
+        DrawText(func, execBox.x + 10, execBox.y + 8, 12, BLACK);
+    }
+
+    Rectangle listBox = { stackBox.x + 40, stackBox.y + 120, 160, 35 };
+    DrawRectangleRec(listBox, WHITE);
+    DrawRectangleLinesEx(listBox, 1, BLACK);
+    DrawText("List", listBox.x + 55, listBox.y + 10, 13, BLACK);
+
+    if (headNode) {
+        Vector2 listTip = GetNodeLeftCenterScreen(headNode);
+        DrawStraightArrow((Vector2){ listBox.x + listBox.width, listBox.y + listBox.height / 2.0f }, listTip, BLACK);
+    }
+
+    if (simStatus == SIM_EXECUTING) {
+        if (context.currentPos <= 1) {
+            Rectangle travBox = { stackBox.x + stackBox.width + 30, listBox.y + 5, 90, 24 };
+            Vector2 travTip = (Vector2){ listBox.x + listBox.width / 2.0f, listBox.y + listBox.height / 2.0f };
+            DrawStackPointerBox("Traverse", travBox, travTip, BLACK, false);
+        } else {
+            MemoryNode* travMem = MemoryManager_GetNode(curr_address);
+            bool isNull = (travMem && travMem->next_address == 0);
+            DrawWorldTraverseBox(GetVisualNode(curr_address), isNull);
+        }
     }
 
     char headTxt[32]; sprintf(headTxt, "head: 0x%X", head_address);
-    DrawText(headTxt, stackBox.x + 20, stackBox.y + 80, 13, BLACK);
+    DrawText(headTxt, stackBox.x + 20, stackBox.y + 60, 13, BLACK);
     char currTxt[32]; sprintf(currTxt, "curr: 0x%X", curr_address);
-    DrawText(currTxt, stackBox.x + 20, stackBox.y + 110, 13, BLACK);
+    DrawText(currTxt, stackBox.x + 20, stackBox.y + 85, 13, BLACK);
 
     // 2. Bottom Function Pills
     DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY);

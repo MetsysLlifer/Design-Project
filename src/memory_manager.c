@@ -44,18 +44,24 @@ void MemoryManager_Update(void) {
 
 void MemoryManager_Draw(Rectangle area, int travAddress) {
     float cellHeight = 25.0f;
+    const int fontSize = 11;
     int visibleNodes = (int)(area.height / cellHeight);
     
     DrawRectangleRec(area, RAYWHITE);
     DrawRectangleLinesEx(area, 2, BLACK);
+
+    if (travAddress == 0) {
+        DrawText("trav -> NULL", area.x + 6, area.y + 4, fontSize, (Color){ 255, 0, 110, 255 });
+    }
 
     for (int i = 0; i < visibleNodes && i < MAX_MEM_NODES; i++) {
         Rectangle cell = { area.x, area.y + i * cellHeight, area.width, cellHeight };
         DrawRectangleLinesEx(cell, 1, BLACK);
 
         float textX = cell.x + 10;
-        if (heap[i].address == travAddress) {
-            DrawText("trav ->", cell.x + 2, cell.y + 6, 11, (Color){ 255, 0, 110, 255 });
+        float textY = cell.y + (cellHeight - (float)fontSize) / 2.0f;
+        if (travAddress != 0 && heap[i].address == travAddress) {
+            DrawText("trav ->", cell.x + 2, textY, fontSize, (Color){ 255, 0, 110, 255 });
             textX = cell.x + 70;
         }
         
@@ -63,11 +69,11 @@ void MemoryManager_Draw(Rectangle area, int travAddress) {
             DrawRectangleRec(cell, (Color){ 0, 0, 0, 10 });
             char text[32];
             sprintf(text, "0x%X: [%c | 0x%X]", heap[i].address, (char)heap[i].value, heap[i].next_address);
-            DrawText(text, textX, cell.y + 6, 11, BLACK);
+            DrawText(text, textX, textY, fontSize, BLACK);
         } else {
             char addr[16];
             sprintf(addr, "0x%X", heap[i].address);
-            DrawText(addr, textX, cell.y + 6, 11, LIGHTGRAY);
+            DrawText(addr, textX, textY, fontSize, LIGHTGRAY);
         }
     }
 }

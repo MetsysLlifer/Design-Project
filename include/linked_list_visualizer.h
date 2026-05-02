@@ -64,6 +64,8 @@ void LinkedListVisualizer_Update(Vector2 mouseWorldPos, float zoom);
 void LinkedListVisualizer_Draw(void);
 void LinkedListVisualizer_DrawUI(void);
 
+void LinkedListVisualizer_SetSpawnCenter(Vector2 center);
+void LinkedListVisualizer_SetCamera(Camera2D cam);
 void LinkedListVisualizer_StartInsert(void);
 void LinkedListVisualizer_TraverseStep(void);
 void LinkedListVisualizer_ExecuteStep(void);
@@ -71,5 +73,7 @@ void LinkedListVisualizer_CenterCamera(Camera2D *cam);
 void LinkedListVisualizer_AddNodeAt(char value, Vector2 worldPos);
 void LinkedListVisualizer_DeleteActive(void);
 int LinkedListVisualizer_GetTraversalAddress(void);
+bool LinkedListVisualizer_IsBusy(void);
+void LinkedListVisualizer_CancelInteraction(void);
 
 #endif
