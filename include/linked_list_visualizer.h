@@ -52,6 +52,7 @@ typedef struct {
     int newNodeAddress;
     int currentLine;
     int totalLines;
+    float lineProgress;
 } SimContext;
 
 void LinkedListVisualizer_Init(void);

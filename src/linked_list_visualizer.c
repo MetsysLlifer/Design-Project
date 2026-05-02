@@ -15,7 +15,7 @@ static Vector2 spawnCenter = { 0, 0 };
 static Camera2D viewCamera = { 0 };
 
 static SimStatus simStatus = SIM_IDLE;
-static SimContext context = { FUNC_NONE, 0, 0, 0, INSERT_INDEX, DELETE_INDEX, 0, 0, 0, 0, 0 };
+static SimContext context = { FUNC_NONE, 0, 0, 0, INSERT_INDEX, DELETE_INDEX, 0, 0, 0, 0, 0, 1.0f };
 static char errorMsg[256] = "";
 static bool showError = false;
 
@@ -162,6 +162,7 @@ void LinkedListVisualizer_Update(Vector2 mouseWorldPos, float zoom) {
 }
 
 void LinkedListVisualizer_NextStep(void) {
+    context.lineProgress = 0.0f;
     if (context.type == FUNC_INSERT) {
         switch (context.currentLine) {
             case 0: // node *temp = malloc(sizeof(node))
@@ -467,65 +468,77 @@ static Vector2 QuadraticBezier(Vector2 p0, Vector2 p1, Vector2 p2, float t) {
     return Vector2Add(Vector2Add(a, b), c);
 }
 
-static void DrawCurvedArrow(Vector2 start, Vector2 end, Color color) {
+static void DrawCurvedArrow(Vector2 start, Vector2 end, Color color, float pct) {
+    if (pct <= 0.0f) return;
     Vector2 control = { (start.x + end.x) / 2.0f, fminf(start.y, end.y) - 60.0f };
     Vector2 prev = start;
     Vector2 secondToLast = start;
-    for (int i = 1; i <= 20; i++) {
-        float t = (float)i / 20.0f;
+    
+    int totalSteps = 20;
+    int visibleSteps = (int)((float)totalSteps * pct);
+    if (visibleSteps < 1) visibleSteps = 1;
+
+    for (int i = 1; i <= visibleSteps; i++) {
+        float t = (float)i / (float)totalSteps;
         Vector2 point = QuadraticBezier(start, control, end, t);
         DrawLineEx(prev, point, 3.0f, color);
         secondToLast = prev;
         prev = point;
     }
 
-    Vector2 dir = Vector2Normalize(Vector2Subtract(end, secondToLast));
-    Vector2 side = { -dir.y, dir.x };
-    float length = 18.0f;
-    float width = 10.0f;
-    Vector2 base = Vector2Subtract(end, Vector2Scale(dir, length));
-    Vector2 p1 = Vector2Add(base, Vector2Scale(side, width));
-    Vector2 p2 = Vector2Subtract(base, Vector2Scale(side, width));
-    
-    DrawTriangle(end, p2, p1, color);
-    DrawLineEx(end, p1, 1.0f, color);
-    DrawLineEx(end, p2, 1.0f, color);
+    if (pct >= 0.95f) {
+        Vector2 dir = Vector2Normalize(Vector2Subtract(end, secondToLast));
+        Vector2 side = { -dir.y, dir.x };
+        float length = 18.0f;
+        float width = 10.0f;
+        Vector2 base = Vector2Subtract(end, Vector2Scale(dir, length));
+        Vector2 p1 = Vector2Add(base, Vector2Scale(side, width));
+        Vector2 p2 = Vector2Subtract(base, Vector2Scale(side, width));
+        
+        DrawTriangle(end, p2, p1, color);
+        DrawLineEx(end, p1, 1.0f, color);
+        DrawLineEx(end, p2, 1.0f, color);
+    }
 }
 
-static void DrawStraightArrow(Vector2 start, Vector2 end, Color color) {
-    if (Vector2Distance(start, end) < 1.0f) return;
-    DrawLineEx(start, end, 3.0f, color);
-    Vector2 dir = Vector2Normalize(Vector2Subtract(end, start));
-    Vector2 side = { -dir.y, dir.x };
-    float length = 18.0f;
-    float width = 10.0f;
-    Vector2 base = Vector2Subtract(end, Vector2Scale(dir, length));
-    Vector2 p1 = Vector2Add(base, Vector2Scale(side, width));
-    Vector2 p2 = Vector2Subtract(base, Vector2Scale(side, width));
+static void DrawStraightArrow(Vector2 start, Vector2 end, Color color, float pct) {
+    if (pct <= 0.0f) return;
+    Vector2 currentEnd = Vector2Add(start, Vector2Scale(Vector2Subtract(end, start), pct));
     
-    DrawTriangle(end, p2, p1, color);
-    DrawLineEx(end, p1, 1.0f, color);
-    DrawLineEx(end, p2, 1.0f, color);
+    DrawLineEx(start, currentEnd, 3.0f, color);
+    
+    if (pct >= 0.95f) {
+        Vector2 dir = Vector2Normalize(Vector2Subtract(end, start));
+        Vector2 side = { -dir.y, dir.x };
+        float length = 18.0f;
+        float width = 10.0f;
+        Vector2 base = Vector2Subtract(end, Vector2Scale(dir, length));
+        Vector2 p1 = Vector2Add(base, Vector2Scale(side, width));
+        Vector2 p2 = Vector2Subtract(base, Vector2Scale(side, width));
+        
+        DrawTriangle(end, p2, p1, color);
+        DrawLineEx(end, p1, 1.0f, color);
+        DrawLineEx(end, p2, 1.0f, color);
+    }
 }
 
 static Rectangle GetPointerFieldBox(VisualNode* vn) {
     return (Rectangle){ vn->position.x + 58, vn->position.y + 15, 34, 20 };
 }
 
-static void DrawStackPointerBox(const char* label, Rectangle box, Vector2 tipPos, Color color, bool showNull) {
+static void DrawStackPointerBox(const char* label, Rectangle box, Vector2 tipPos, Color color, bool showNull, float pct) {
     DrawRectangleRec(box, WHITE);
     DrawRectangleLinesEx(box, 1, color);
     DrawText(label, box.x + 6, box.y + 4, 12, color);
     
     Vector2 arrowEnd = tipPos;
     if (showNull) {
-        // Stop arrow at the left edge of the NULL box
         arrowEnd.x -= 25.0f;
     }
     
-    DrawStraightArrow((Vector2){ box.x + box.width, box.y + box.height / 2.0f }, arrowEnd, color);
+    DrawStraightArrow((Vector2){ box.x + box.width, box.y + box.height / 2.0f }, arrowEnd, color, pct);
 
-    if (showNull) {
+    if (showNull && pct >= 0.95f) {
         Rectangle nullBox = { tipPos.x - 25, tipPos.y - 10, 50, 20 };
         DrawRectangleRec(nullBox, (Color){ 30, 30, 30, 255 });
         DrawRectangleLinesEx(nullBox, 1, (Color){ 220, 220, 220, 255 });
@@ -573,10 +586,16 @@ void LinkedListVisualizer_Draw(void) {
         if (vn && node->next_address != 0) {
             VisualNode* nextVn = GetVisualNode(node->next_address);
             if (nextVn) {
+                float progress = 1.0f;
+                // Animate if this is the 'prev->next' change in Insert (line 10) or Delete (line 10)
+                if (simStatus == SIM_EXECUTING && current == curr_address && context.currentLine == 10) {
+                    progress = context.lineProgress;
+                }
+                
                 Rectangle pointerBox = GetPointerFieldBox(vn);
                 Vector2 start = { pointerBox.x + pointerBox.width / 2.0f, pointerBox.y + pointerBox.height / 2.0f };
                 Vector2 end = { nextVn->position.x, nextVn->position.y + 25 };
-                DrawCurvedArrow(start, end, BLACK);
+                DrawCurvedArrow(start, end, BLACK, progress);
             }
         }
         current = node->next_address;
@@ -594,10 +613,17 @@ void LinkedListVisualizer_Draw(void) {
             if (!inMainList) {
                 VisualNode* nextVn = GetVisualNode(node->next_address);
                 if (nextVn) {
+                    float progress = 1.0f;
+                    // Animate if this is the 'temp->next' change in Insert (line 3 or 9)
+                    if (simStatus == SIM_EXECUTING && vn->address == context.newNodeAddress && 
+                       (context.currentLine == 3 || context.currentLine == 9)) {
+                        progress = context.lineProgress;
+                    }
+
                     Rectangle pointerBox = GetPointerFieldBox(vn);
                     Vector2 start = { pointerBox.x + pointerBox.width / 2.0f, pointerBox.y + pointerBox.height / 2.0f };
                     Vector2 end = { nextVn->position.x, nextVn->position.y + 25 };
-                    DrawCurvedArrow(start, end, DARKGRAY);
+                    DrawCurvedArrow(start, end, DARKGRAY, progress);
                 }
             }
         }
@@ -660,11 +686,18 @@ void LinkedListVisualizer_DrawUI(void) {
 
     VisualNode* headNode = GetVisualNode(head_address);
     if (headNode) {
+        float listProg = 1.0f;
+        // Animate List pointer if line 4 (Insert First) or line 3 (Delete First)
+        if (simStatus == SIM_EXECUTING) {
+            if (context.type == FUNC_INSERT && context.currentLine == 4) listProg = context.lineProgress;
+            if (context.type == FUNC_DELETE && context.currentLine == 3) listProg = context.lineProgress;
+        }
+        
         Vector2 listTip = GetNodeLeftCenterScreen(headNode);
-        DrawStraightArrow((Vector2){ listBox.x + listBox.width, listBox.y + listBox.height / 2.0f }, listTip, BLACK);
+        DrawStraightArrow((Vector2){ listBox.x + listBox.width, listBox.y + listBox.height / 2.0f }, listTip, BLACK, listProg);
     } else {
         Vector2 listTip = (Vector2){ listBox.x + listBox.width + 100, listBox.y + listBox.height / 2.0f };
-        DrawStackPointerBox("List", listBox, listTip, BLACK, true);
+        DrawStackPointerBox("List", listBox, listTip, BLACK, true, 1.0f);
     }
 
     if (simStatus == SIM_EXECUTING) {
@@ -677,18 +710,22 @@ void LinkedListVisualizer_DrawUI(void) {
         if (context.type == FUNC_DELETE && context.currentLine >= 6) showTrav = true;
 
         if (showTrav) {
+            float travProg = 1.0f;
+            // Animate traverse growth during 'prev = head' (line 6) or 'prev = prev->next' (line 8)
+            if (context.currentLine == 6 || context.currentLine == 8) travProg = context.lineProgress;
+
             if (curr_address != 0) {
                 VisualNode* travNode = GetVisualNode(curr_address);
                 if (travNode) {
                     MemoryNode* travMem = MemoryManager_GetNode(curr_address);
                     bool isNull = (travMem && travMem->next_address == 0);
                     Vector2 travTip = isNull ? GetPointerFieldCenterScreen(travNode) : GetNodeLeftCenterScreen(travNode);
-                    DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, isNull);
+                    DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, isNull, travProg);
                 }
             } else {
                 // Point to the List box if traversal just started but curr_address is not yet updated
                 Vector2 listCenter = { listBox.x + listBox.width / 2.0f, listBox.y + listBox.height / 2.0f };
-                DrawStackPointerBox("traverse", travBox, listCenter, (Color){ 255, 0, 110, 255 }, false);
+                DrawStackPointerBox("traverse", travBox, listCenter, (Color){ 255, 0, 110, 255 }, false, travProg);
             }
         }
     }

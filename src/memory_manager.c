@@ -54,17 +54,17 @@ void MemoryManager_Draw(Rectangle area, int travAddress) {
         Rectangle cell = { area.x, area.y + i * cellHeight, area.width, cellHeight };
         DrawRectangleLinesEx(cell, 1, BLACK);
 
-        float textX = cell.x + 10;
+        float textX = cell.x + 5;
         float textY = cell.y + (cellHeight - (float)fontSize) / 2.0f;
+        
         if (travAddress != 0 && heap[i].address == travAddress) {
-            DrawText("trav ->", cell.x + 2, textY, fontSize, (Color){ 255, 0, 110, 255 });
-            textX = cell.x + 70;
+            DrawText("trav ->", cell.x - 45, textY, fontSize, (Color){ 255, 0, 110, 255 });
         }
         
         if (heap[i].status == MEM_ALLOCATED) {
             DrawRectangleRec(cell, (Color){ 0, 0, 0, 10 });
-            char text[32];
-            sprintf(text, "0x%X: [%c | 0x%X]", heap[i].address, (char)heap[i].value, heap[i].next_address);
+            char text[48];
+            sprintf(text, "0x%X: [%d | 0x%X]", heap[i].address, heap[i].value, heap[i].next_address);
             DrawText(text, textX, textY, fontSize, BLACK);
         } else {
             char addr[16];
