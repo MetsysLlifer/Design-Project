@@ -84,7 +84,11 @@ int main(void) {
                 }
 
                 if (showMemoryVis) {
-                    MemoryManager_Draw((Rectangle){ (float)sw - 250, 50, 200, 600 });
+                    int travAddr = 0;
+                    if (selectedADT == ADT_LIST && selectedImpl == IMPL_LINKED) {
+                        travAddr = LinkedListVisualizer_GetTraversalAddress();
+                    }
+                    MemoryManager_Draw((Rectangle){ (float)sw - 250, 50, 200, 600 }, travAddr);
                 }
 
                 if (GuiButton((Rectangle){ 20, 20, 80, 30 }, "BACK")) currentScene = SCENE_START;

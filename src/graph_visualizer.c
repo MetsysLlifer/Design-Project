@@ -94,7 +94,7 @@ void GraphVisualizer_Draw(void) {
     if (currentType == GRAPH_MODE_MATRIX) {
         DrawMatrixMemory((Rectangle){ 850, 100, 300, 300 });
     } else {
-        MemoryManager_Draw((Rectangle){ 750, 350, 500, 320 });
+        MemoryManager_Draw((Rectangle){ 750, 350, 500, 320 }, 0);
         DrawText("PHYSICAL VIEW: ADJACENCY LIST (LINKED LISTS)", 750, 325, 15, (Color){ 255, 0, 110, 255 });
     }
 }

@@ -24,7 +24,7 @@ void MemoryManager_Init(void);
 int MemoryManager_Malloc(int value);
 void MemoryManager_Free(int address);
 void MemoryManager_Update(void);
-void MemoryManager_Draw(Rectangle area);
+void MemoryManager_Draw(Rectangle area, int travAddress);
 
 MemoryNode* MemoryManager_GetNode(int address);
 int MemoryManager_GetAddressByIndex(int index);

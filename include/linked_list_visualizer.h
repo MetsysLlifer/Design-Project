@@ -6,6 +6,8 @@
 
 typedef enum {
     SIM_IDLE,
+    SIM_SELECT_INSERT,
+    SIM_SELECT_DELETE,
     SIM_INPUT_PARAMS,
     SIM_EXECUTING,
     SIM_ERROR
@@ -16,6 +18,27 @@ typedef enum {
     FUNC_INSERT,
     FUNC_DELETE
 } ActiveFunc;
+
+typedef enum {
+    INSERT_FIRST,
+    INSERT_LAST,
+    INSERT_INDEX
+} InsertMode;
+
+typedef enum {
+    DELETE_FIRST,
+    DELETE_LAST,
+    DELETE_INDEX,
+    DELETE_ELEMENT
+} DeleteMode;
+
+typedef enum {
+    DEL_STEP_TRAVERSE,
+    DEL_STEP_SET_TODELETE,
+    DEL_STEP_RELINK,
+    DEL_STEP_FREE,
+    DEL_STEP_DONE
+} DeleteStep;
 
 typedef struct {
     int address;
@@ -29,6 +52,11 @@ typedef struct {
     int targetVal;
     int targetPos;
     int currentPos;
+    InsertMode insertMode;
+    DeleteMode deleteMode;
+    DeleteStep deleteStep;
+    int prevAddress;
+    int toDeleteAddress;
 } SimContext;
 
 void LinkedListVisualizer_Init(void);
@@ -42,5 +70,6 @@ void LinkedListVisualizer_ExecuteStep(void);
 void LinkedListVisualizer_CenterCamera(Camera2D *cam);
 void LinkedListVisualizer_AddNodeAt(char value, Vector2 worldPos);
 void LinkedListVisualizer_DeleteActive(void);
+int LinkedListVisualizer_GetTraversalAddress(void);
 
 #endif
