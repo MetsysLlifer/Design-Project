@@ -35,6 +35,7 @@ typedef enum {
 typedef struct {
     int address;
     Vector2 position;
+    Vector2 targetPosition;
     bool isDragging;
     char data;
 } VisualNode;
