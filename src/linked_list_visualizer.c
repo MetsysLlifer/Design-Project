@@ -179,6 +179,7 @@ void LinkedListVisualizer_NextStep(void) {
                     visualNodes[visualNodeCount].position = (Vector2){ targetPos.x, targetPos.y - 100 }; // Spawn from above
                     visualNodes[visualNodeCount].targetPosition = targetPos;
                     visualNodes[visualNodeCount].data = 0;
+                    visualNodes[visualNodeCount].color = (Color){ (unsigned char)GetRandomValue(50, 200), (unsigned char)GetRandomValue(50, 200), (unsigned char)GetRandomValue(50, 200), 255 };
                     visualNodes[visualNodeCount].isDragging = false;
                     visualNodeCount++;
                     context.currentLine = 1;
@@ -569,7 +570,7 @@ void LinkedListVisualizer_Draw(void) {
         VisualNode* vn = &visualNodes[i];
         Rectangle rec = { vn->position.x, vn->position.y, 100, 50 };
         
-        Color bgColor = (Color){ 245, 255, 245, 255 }; // Light green tint for Heap objects
+        Color bgColor = vn->color; 
         if (vn->address == context.newNodeAddress) bgColor = (Color){ 200, 255, 200, 255 };
         if (vn->address == context.toDeleteAddress) bgColor = (Color){ 255, 200, 200, 255 };
         if (vn->address == curr_address) bgColor = (Color){ 255, 255, 200, 255 };
@@ -578,8 +579,8 @@ void LinkedListVisualizer_Draw(void) {
         DrawRectangleLinesEx(rec, 2, DARKGREEN); // Heap object border
         DrawLineEx((Vector2){ vn->position.x + 50, vn->position.y }, (Vector2){ vn->position.x + 50, vn->position.y + 50 }, 1, DARKGREEN);
         char val[4]; sprintf(val, "%d", (int)vn->data);
-        DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, DARKGREEN);
-        DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, DARKGREEN);
+        DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, WHITE);
+        DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, WHITE);
         char addr[16]; sprintf(addr, "0x%X", vn->address);
         DrawText(addr, vn->position.x, vn->position.y - 12, 10, DARKGREEN);
     }

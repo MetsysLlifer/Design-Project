@@ -31,6 +31,10 @@ static struct {
 static ArrStatus arrStatus = ARR_IDLE;
 static char valBuf[8] = "10", posBuf[8] = "0";
 static bool valEditMode = false, posEditMode = false;
+static char errorMsg[256] = "";
+static bool showError = false;
+static char notifyMsg[256] = "";
+static bool showNotify = false;
 
 static const char* insertPseudocode[] = {
     "if (size == capacity) return",      // 0
@@ -79,12 +83,26 @@ static void DrawPseudocode(int x, int y, const char** lines, int count, int curr
     }
 }
 
+static Color elementColors[] = {
+    (Color){ 0, 121, 241, 255 },   // Blue
+    (Color){ 0, 228, 48, 255 },    // Green
+    (Color){ 255, 161, 0, 255 },   // Orange
+    (Color){ 200, 122, 255, 255 }, // Purple
+    (Color){ 255, 203, 0, 255 },   // Yellow
+    (Color){ 255, 80, 80, 255 }    // Red
+};
+
+static Color GetRandomElementColor(void) {
+    return elementColors[GetRandomValue(0, 5)];
+}
+
 // --- Logic ---
 
 void ArrayVisualizer_Init(void) {
     array_size = 0;
     for (int i = 0; i < MAX_CAPACITY; i++) {
         visualElements[i].data = 0;
+        visualElements[i].color = WHITE;
         visualElements[i].position = GetElementPosition(i);
         visualElements[i].targetPosition = visualElements[i].position;
     }
@@ -94,6 +112,8 @@ void ArrayVisualizer_Init(void) {
     ctx.lineProgress = 1.0f;
     valEditMode = false;
     posEditMode = false;
+    showError = false;
+    showNotify = false;
 }
 
 void ArrayVisualizer_Update(Vector2 mouseWorldPos, float zoom) {
@@ -122,11 +142,17 @@ void ArrayVisualizer_NextStep(void) {
                 break;
             case 2: 
                 visualElements[ctx.i].data = visualElements[ctx.i-1].data; 
+                visualElements[ctx.i].color = visualElements[ctx.i-1].color;
+                // Visual Shifting Effect
+                visualElements[ctx.i].position.x -= 20.0f; 
                 ctx.i--; 
                 ctx.currentLine = 1; 
                 break;
             case 3: 
                 visualElements[ctx.targetPos].data = (char)ctx.targetVal; 
+                visualElements[ctx.targetPos].color = GetRandomElementColor();
+                // Visual Spawn Effect
+                visualElements[ctx.targetPos].position.y -= 40.0f;
                 ctx.currentLine = 4; 
                 break;
             case 4: 
@@ -147,6 +173,9 @@ void ArrayVisualizer_NextStep(void) {
                 break;
             case 2: 
                 visualElements[ctx.i].data = visualElements[ctx.i+1].data; 
+                visualElements[ctx.i].color = visualElements[ctx.i+1].color;
+                // Visual Shifting Effect
+                visualElements[ctx.i].position.x += 20.0f;
                 ctx.i++; 
                 ctx.currentLine = 1; 
                 break;
@@ -162,29 +191,37 @@ void ArrayVisualizer_NextStep(void) {
 void ArrayVisualizer_Draw(void) {
     int effectiveSize = array_size;
     if (arrStatus == ARR_EXECUTING && ctx.type == ARR_FUNC_INSERT) {
-        // During insertion, we might be shifting into the 'size' index
         effectiveSize = array_size + 1;
     }
 
     for (int i = 0; i < MAX_CAPACITY; i++) {
         Rectangle rec = { visualElements[i].position.x, visualElements[i].position.y, 55, 55 };
-        Color bc = (Color){ 245, 255, 245, 255 }; // Heap green
-        
+        Color bc = (Color){ 245, 255, 245, 255 }; // Default Heap Green
+        Color tc = DARKGREEN;
+
         if (i < effectiveSize) {
-            // Highlight the current index being shifted or modified
-            if (arrStatus == ARR_EXECUTING && i == ctx.i) bc = (Color){ 255, 255, 200, 255 };
-            // Highlight target position specifically during insertion
-            if (arrStatus == ARR_EXECUTING && ctx.type == ARR_FUNC_INSERT && i == ctx.targetPos && ctx.currentLine >= 3) bc = (Color){ 200, 255, 200, 255 };
+            bc = visualElements[i].color;
+            tc = WHITE;
+            
+            if (arrStatus == ARR_EXECUTING && i == ctx.i) {
+                DrawRectangleLinesEx((Rectangle){ rec.x - 4, rec.y - 4, rec.width + 8, rec.height + 8 }, 2, YELLOW);
+            }
 
             DrawRectangleRec(rec, bc); 
             DrawRectangleLinesEx(rec, 2, DARKGREEN);
             char val[4]; sprintf(val, "%d", (int)visualElements[i].data);
-            DrawText(val, rec.x + (55 - MeasureText(val, 20))/2, rec.y + 17, 20, DARKGREEN);
+            DrawText(val, rec.x + (55 - MeasureText(val, 24))/2, rec.y + 15, 24, tc);
         } else {
             DrawRectangleLinesEx(rec, 1, (Color){ 0, 100, 0, 40 });
         }
-        char idx[4]; sprintf(idx, "[%d]", i); DrawText(idx, rec.x + 15, rec.y + 60, 10, GRAY);
+        
+        char idx[8]; sprintf(idx, "[%d]", i);
+        DrawText(idx, rec.x + (55 - MeasureText(idx, 12))/2, rec.y + 60, 12, GRAY);
     }
+    
+    // Legend at bottom
+    int sw = GetScreenWidth(); int sh = GetScreenHeight();
+    DrawText("Arrays offer fast O(1) random access but slow O(n) insertions/deletions due to physical shifting.", sw/2 - 350, sh - 140, 13, DARKGRAY);
 }
 
 void ArrayVisualizer_DrawUI(void) {
@@ -231,9 +268,57 @@ void ArrayVisualizer_DrawUI(void) {
         DrawText("Position:", pb.x + 30, pb.y + 110, 12, BLACK);
         if (GuiTextBox((Rectangle){pb.x + 120, pb.y + 105, 160, 30}, posBuf, 8, posEditMode)) { posEditMode = !posEditMode; valEditMode = false; }
         if (GuiButton((Rectangle){pb.x + 120, pb.y + 160, 100, 35}, "START")) {
-            ctx.targetVal = atoi(valBuf); ctx.targetPos = atoi(posBuf);
+            int v = atoi(valBuf); 
+            int p = atoi(posBuf);
+            
+            if (ctx.type == ARR_FUNC_INSERT) {
+                if (array_size >= array_capacity) {
+                    showError = true;
+                    sprintf(errorMsg, "LOGIC ERROR: Array is at full capacity (%d).", array_capacity);
+                    return;
+                }
+                if (p < 0) p = 0;
+                if (p > array_size) {
+                    int oldP = p;
+                    p = array_size;
+                    showNotify = true;
+                    sprintf(notifyMsg, "Position %d is too far. Clamping to index %d.", oldP, p);
+                }
+            } else if (ctx.type == ARR_FUNC_DELETE) {
+                if (array_size == 0) {
+                    showError = true;
+                    sprintf(errorMsg, "LOGIC ERROR: Array is empty.");
+                    return;
+                }
+                if (p < 0 || p >= array_size) {
+                    showError = true;
+                    sprintf(errorMsg, "LOGIC ERROR: Position %d is invalid. Valid: 0-%d.", p, array_size-1);
+                    return;
+                }
+            }
+
+            ctx.targetVal = v; ctx.targetPos = p;
             valEditMode = posEditMode = false; ctx.currentLine = 0; arrStatus = ARR_EXECUTING;
         }
+    }
+
+    // 7. Notification / Error Popups
+    if (showNotify) {
+        Rectangle box = { (float)sw/2 - 180, (float)sh/2 - 50, 360, 100 };
+        DrawRectangleRec(box, WHITE);
+        DrawRectangleLinesEx(box, 2, DARKBLUE);
+        DrawText("NOTIFICATION", box.x + 110, box.y + 15, 16, DARKBLUE);
+        DrawText(notifyMsg, box.x + 20, box.y + 45, 12, BLACK);
+        if (GuiButton((Rectangle){box.x + 130, box.y + 65, 100, 25}, "PROCEED")) showNotify = false;
+    }
+
+    if (showError) {
+        Rectangle errBox = { (float)sw/2 - 200, (float)sh/2 - 50, 400, 120 };
+        DrawRectangleRec(errBox, WHITE);
+        DrawRectangleLinesEx(errBox, 4, BLACK);
+        DrawText("LOGIC ERROR", errBox.x + 130, errBox.y + 20, 18, BLACK);
+        DrawText(errorMsg, errBox.x + 20, errBox.y + 55, 12, BLACK);
+        if (GuiButton((Rectangle){errBox.x + 150, errBox.y + 80, 100, 30}, "OK")) showError = false;
     }
 }
 

@@ -57,3 +57,4 @@ The executable is created at:
 - `raygui.h` is already bundled in `include/raygui.h`.
 - Raylib prebuilt files are included under `vendor/raylib/` so users can clone and build without extra setup.
 - The project specification is documented in `PROJECT_SPEC.md`.
+- Guidelines for adding new ADTs can be found in `ADT_IMPLEMENTATION_GUIDE.md`.

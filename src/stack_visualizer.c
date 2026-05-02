@@ -256,6 +256,7 @@ void StackVisualizer_NextStep(void) {
                     visualNodes[visualNodeCount].position = (Vector2){ targetPos.x, targetPos.y - 100 };
                     visualNodes[visualNodeCount].targetPosition = targetPos;
                     visualNodes[visualNodeCount].data = 0;
+                    visualNodes[visualNodeCount].color = (Color){ (unsigned char)GetRandomValue(50, 200), (unsigned char)GetRandomValue(50, 200), (unsigned char)GetRandomValue(50, 200), 255 };
                     visualNodeCount++;
                     ctx.currentLine = 1;
                 }
@@ -317,15 +318,15 @@ void StackVisualizer_Draw(void) {
     for (int i = 0; i < visualNodeCount; i++) {
         VisualNode* vn = &visualNodes[i];
         Rectangle rec = { vn->position.x, vn->position.y, 100, 50 };
-        Color bgColor = (Color){ 245, 255, 245, 255 };
+        Color bgColor = vn->color;
         if (vn->address == ctx.newNodeAddress) bgColor = (Color){ 200, 255, 200, 255 };
         if (vn->address == ctx.toDeleteAddress) bgColor = (Color){ 255, 200, 200, 255 };
         DrawRectangleRec(rec, bgColor);
         DrawRectangleLinesEx(rec, 2, DARKGREEN);
         DrawLineEx((Vector2){ vn->position.x + 50, vn->position.y }, (Vector2){ vn->position.x + 50, vn->position.y + 50 }, 1, DARKGREEN);
         char val[4]; sprintf(val, "%d", (int)vn->data);
-        DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, DARKGREEN);
-        DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, DARKGREEN);
+        DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, WHITE);
+        DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, WHITE);
         char addr[16]; sprintf(addr, "0x%X", vn->address);
         DrawText(addr, vn->position.x, vn->position.y - 12, 10, DARKGREEN);
     }

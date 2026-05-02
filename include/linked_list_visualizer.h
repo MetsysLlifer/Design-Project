@@ -38,6 +38,7 @@ typedef struct {
     Vector2 targetPosition;
     bool isDragging;
     char data;
+    Color color;
 } VisualNode;
 
 typedef struct {
