@@ -1,12 +1,15 @@
 # Build artifacts
 bin/
 obj/
+*.o
+*.a
+*.dylib
+*.so
 
 # CMake
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
-Makefile
 build/
 
 # OS files
