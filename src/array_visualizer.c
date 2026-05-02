@@ -88,7 +88,12 @@ void ArrayVisualizer_Init(void) {
         visualElements[i].position = GetElementPosition(i);
         visualElements[i].targetPosition = visualElements[i].position;
     }
-    arrStatus = ARR_IDLE; ctx.type = ARR_FUNC_NONE; ctx.currentLine = 0; ctx.lineProgress = 1.0f;
+    arrStatus = ARR_IDLE; 
+    ctx.type = ARR_FUNC_NONE; 
+    ctx.currentLine = 0; 
+    ctx.lineProgress = 1.0f;
+    valEditMode = false;
+    posEditMode = false;
 }
 
 void ArrayVisualizer_Update(Vector2 mouseWorldPos, float zoom) {
