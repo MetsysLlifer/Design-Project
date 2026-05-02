@@ -15,9 +15,56 @@ static Vector2 spawnCenter = { 0, 0 };
 static Camera2D viewCamera = { 0 };
 
 static SimStatus simStatus = SIM_IDLE;
-static SimContext context = { FUNC_NONE, 0, 0, 0, INSERT_INDEX, DELETE_INDEX, DEL_STEP_TRAVERSE, 0, 0 };
+static SimContext context = { FUNC_NONE, 0, 0, 0, INSERT_INDEX, DELETE_INDEX, 0, 0, 0, 0, 0 };
 static char errorMsg[256] = "";
 static bool showError = false;
+
+static const char* insertPseudocode[] = {
+    "node *temp = malloc(sizeof(node))", // 0
+    "temp->data = val",                  // 1
+    "if (pos == 1) {",                  // 2
+    "    temp->next = head",            // 3
+    "    head = temp",                  // 4
+    "} else {",                         // 5
+    "    node *prev = head",            // 6
+    "    for (i=1; i < pos-1; i++)",    // 7
+    "        prev = prev->next",        // 8
+    "    temp->next = prev->next",      // 9
+    "    prev->next = temp",            // 10
+    "}"                                 // 11
+};
+
+static const char* deletePseudocode[] = {
+    "if (head == NULL) return",          // 0
+    "if (pos == 1) {",                  // 1
+    "    node *temp = head",            // 2
+    "    head = head->next",            // 3
+    "    free(temp)",                   // 4
+    "} else {",                         // 5
+    "    node *prev = head",            // 6
+    "    for (i=1; i < pos-1; i++)",    // 7
+    "        prev = prev->next",        // 8
+    "    node *toDel = prev->next",     // 9
+    "    prev->next = toDel->next",     // 10
+    "    free(toDel)",                  // 11
+    "}"                                 // 12
+};
+
+static void DrawPseudocode(int x, int y, const char** lines, int count, int currentLine) {
+    Rectangle bg = { (float)x - 10, (float)y - 10, 300, (float)count * 20 + 20 };
+    DrawRectangleRec(bg, (Color){ 240, 240, 240, 255 });
+    DrawRectangleLinesEx(bg, 1, DARKGRAY);
+    DrawText("ALGORITHM PSEUDOCODE", x, y - 25, 12, DARKGRAY);
+
+    for (int i = 0; i < count; i++) {
+        Color textColor = BLACK;
+        if (i == currentLine) {
+            DrawRectangle(x - 5, y + i * 20, 290, 18, (Color){ 255, 255, 0, 150 });
+            textColor = RED;
+        }
+        DrawText(lines[i], x, y + i * 20, 15, textColor);
+    }
+}
 
 // Buffers for parameters
 static char valBuf[8] = "10";
@@ -26,6 +73,7 @@ static char delValBuf[8] = "10";
 static char delPosBuf[8] = "1";
 
 static Vector2 FindSpawnPosition(Vector2 basePos);
+static void RemoveVisualNode(int address);
 
 void LinkedListVisualizer_Init(void) {
     MemoryManager_Init();
@@ -38,9 +86,11 @@ void LinkedListVisualizer_Init(void) {
     context.type = FUNC_NONE;
     context.insertMode = INSERT_INDEX;
     context.deleteMode = DELETE_INDEX;
-    context.deleteStep = DEL_STEP_TRAVERSE;
     context.prevAddress = 0;
     context.toDeleteAddress = 0;
+    context.newNodeAddress = 0;
+    context.currentLine = 0;
+    context.totalLines = 0;
     showError = false;
 }
 
@@ -54,18 +104,6 @@ static int GetListLength(void) {
         current = node->next_address;
     }
     return length;
-}
-
-static int GetTailAddress(void) {
-    int current = head_address;
-    int last = 0;
-    while (current != 0) {
-        MemoryNode* node = MemoryManager_GetNode(current);
-        if (!node) break;
-        last = current;
-        current = node->next_address;
-    }
-    return last;
 }
 
 static void ResetTraversal(void) {
@@ -108,29 +146,156 @@ void LinkedListVisualizer_Update(Vector2 mouseWorldPos, float zoom) {
     if (draggingIdx != -1) visualNodes[draggingIdx].position = mouseWorldPos;
 }
 
-// Logic implementations
-static void PerformInsert(void) {
-    int new_addr = MemoryManager_Malloc(context.targetVal);
-    if (new_addr == -1) return;
-
-    MemoryNode* newNode = MemoryManager_GetNode(new_addr);
-    if (context.targetPos == 1 || head_address == 0) {
-        newNode->next_address = head_address;
-        head_address = new_addr;
-    } else {
-        MemoryNode* prevNode = MemoryManager_GetNode(curr_address);
-        newNode->next_address = prevNode->next_address;
-        prevNode->next_address = new_addr;
+void LinkedListVisualizer_NextStep(void) {
+    if (context.type == FUNC_INSERT) {
+        switch (context.currentLine) {
+            case 0: // node *temp = malloc(sizeof(node))
+                context.newNodeAddress = MemoryManager_Malloc(0);
+                if (context.newNodeAddress != -1) {
+                    visualNodes[visualNodeCount].address = context.newNodeAddress;
+                    visualNodes[visualNodeCount].position = FindSpawnPosition(spawnCenter);
+                    visualNodes[visualNodeCount].data = 0;
+                    visualNodes[visualNodeCount].isDragging = false;
+                    visualNodeCount++;
+                    context.currentLine = 1;
+                }
+                break;
+            case 1: // temp->data = val
+                {
+                    MemoryNode* n = MemoryManager_GetNode(context.newNodeAddress);
+                    if (n) n->value = context.targetVal;
+                    VisualNode* vn = GetVisualNode(context.newNodeAddress);
+                    if (vn) vn->data = (char)context.targetVal;
+                    context.currentLine = 2;
+                }
+                break;
+            case 2: // if (pos == 1)
+                if (context.targetPos == 1) context.currentLine = 3;
+                else context.currentLine = 5;
+                break;
+            case 3: // temp->next = head
+                {
+                    MemoryNode* n = MemoryManager_GetNode(context.newNodeAddress);
+                    if (n) n->next_address = head_address;
+                    context.currentLine = 4;
+                }
+                break;
+            case 4: // head = temp
+                head_address = context.newNodeAddress;
+                context.newNodeAddress = 0;
+                simStatus = SIM_IDLE;
+                context.type = FUNC_NONE;
+                break;
+            case 5: // else {
+                context.currentLine = 6;
+                break;
+            case 6: // node *prev = head
+                curr_address = head_address;
+                context.currentPos = 1;
+                context.currentLine = 7;
+                break;
+            case 7: // for (i=1; i < pos-1; i++)
+                if (context.currentPos < context.targetPos - 1) context.currentLine = 8;
+                else context.currentLine = 9;
+                break;
+            case 8: // prev = prev->next
+                LinkedListVisualizer_TraverseStep();
+                context.currentLine = 7; // Loop back
+                break;
+            case 9: // temp->next = prev->next
+                {
+                    MemoryNode* n = MemoryManager_GetNode(context.newNodeAddress);
+                    MemoryNode* prev = MemoryManager_GetNode(curr_address);
+                    if (n && prev) n->next_address = prev->next_address;
+                    context.currentLine = 10;
+                }
+                break;
+            case 10: // prev->next = temp
+                {
+                    MemoryNode* prev = MemoryManager_GetNode(curr_address);
+                    if (prev) prev->next_address = context.newNodeAddress;
+                    context.currentLine = 11;
+                }
+                break;
+            case 11: // }
+                context.newNodeAddress = 0;
+                simStatus = SIM_IDLE;
+                context.type = FUNC_NONE;
+                break;
+        }
+    } else if (context.type == FUNC_DELETE) {
+        switch (context.currentLine) {
+            case 0: // if (head == NULL) return
+                if (head_address == 0) {
+                    simStatus = SIM_IDLE;
+                    context.type = FUNC_NONE;
+                } else context.currentLine = 1;
+                break;
+            case 1: // if (pos == 1)
+                if (context.targetPos == 1) context.currentLine = 2;
+                else context.currentLine = 5;
+                break;
+            case 2: // node *temp = head
+                context.toDeleteAddress = head_address;
+                context.currentLine = 3;
+                break;
+            case 3: // head = head->next
+                {
+                    MemoryNode* n = MemoryManager_GetNode(head_address);
+                    if (n) head_address = n->next_address;
+                    context.currentLine = 4;
+                }
+                break;
+            case 4: // free(temp)
+                MemoryManager_Free(context.toDeleteAddress);
+                RemoveVisualNode(context.toDeleteAddress);
+                context.toDeleteAddress = 0;
+                simStatus = SIM_IDLE;
+                context.type = FUNC_NONE;
+                break;
+            case 5: // else {
+                context.currentLine = 6;
+                break;
+            case 6: // node *prev = head
+                curr_address = head_address;
+                context.currentPos = 1;
+                context.currentLine = 7;
+                break;
+            case 7: // for (i=1; i < pos-1; i++)
+                if (context.currentPos < context.targetPos - 1) context.currentLine = 8;
+                else context.currentLine = 9;
+                break;
+            case 8: // prev = prev->next
+                LinkedListVisualizer_TraverseStep();
+                context.currentLine = 7; // Loop back
+                break;
+            case 9: // node *toDel = prev->next
+                {
+                    MemoryNode* prev = MemoryManager_GetNode(curr_address);
+                    if (prev) context.toDeleteAddress = prev->next_address;
+                    context.currentLine = 10;
+                }
+                break;
+            case 10: // prev->next = toDel->next
+                {
+                    MemoryNode* prev = MemoryManager_GetNode(curr_address);
+                    MemoryNode* toDel = MemoryManager_GetNode(context.toDeleteAddress);
+                    if (prev && toDel) prev->next_address = toDel->next_address;
+                    context.currentLine = 11;
+                }
+                break;
+            case 11: // free(toDel)
+                MemoryManager_Free(context.toDeleteAddress);
+                RemoveVisualNode(context.toDeleteAddress);
+                context.currentLine = 12;
+                break;
+            case 12: // }
+                context.toDeleteAddress = 0;
+                simStatus = SIM_IDLE;
+                context.type = FUNC_NONE;
+                break;
+        }
     }
-
-    // Visual Mapping
-    visualNodes[visualNodeCount].address = new_addr;
-    visualNodes[visualNodeCount].position = FindSpawnPosition(spawnCenter);
-    visualNodes[visualNodeCount].data = (char)context.targetVal;
-    visualNodeCount++;
-
-    simStatus = SIM_IDLE;
-    context.type = FUNC_NONE;
 }
 
 void LinkedListVisualizer_SetSpawnCenter(Vector2 center) {
@@ -154,22 +319,6 @@ void LinkedListVisualizer_TraverseStep(void) {
     }
     curr_address = n->next_address;
     context.currentPos++;
-}
-
-void LinkedListVisualizer_ExecuteStep(void) {
-    if (context.type == FUNC_INSERT) {
-        if (context.targetPos == 1) {
-            PerformInsert();
-            return;
-        }
-        if (context.currentPos != context.targetPos - 1) {
-            showError = true;
-            sprintf(errorMsg, "SIMULATION ERROR: You must traverse to position %d first!", context.targetPos - 1);
-            return;
-        }
-        PerformInsert();
-        return;
-    }
 }
 
 static void RemoveVisualNode(int address) {
@@ -258,60 +407,6 @@ static void StartDeleteExecution(void) {
     context.targetPos = targetPos;
     context.prevAddress = 0;
     context.toDeleteAddress = 0;
-    context.deleteStep = DEL_STEP_TRAVERSE;
-    ResetTraversal();
-}
-
-static void Delete_SetToDelete(void) {
-    if (context.deleteStep != DEL_STEP_TRAVERSE) {
-        showError = true;
-        sprintf(errorMsg, "SIMULATION ERROR: You must traverse first.");
-        return;
-    }
-    if (curr_address == 0) {
-        showError = true;
-        sprintf(errorMsg, "SIMULATION ERROR: Cannot select NULL as toDelete.");
-        return;
-    }
-    if (context.currentPos != context.targetPos) {
-        showError = true;
-        sprintf(errorMsg, "SIMULATION ERROR: Traverse to position %d first.", context.targetPos);
-        return;
-    }
-    context.toDeleteAddress = curr_address;
-    context.deleteStep = DEL_STEP_RELINK;
-}
-
-static void Delete_Relink(void) {
-    if (context.deleteStep != DEL_STEP_RELINK) {
-        showError = true;
-        sprintf(errorMsg, "SIMULATION ERROR: Create toDelete first.");
-        return;
-    }
-    MemoryNode* toDelete = MemoryManager_GetNode(context.toDeleteAddress);
-    if (!toDelete) return;
-
-    if (context.prevAddress == 0) {
-        head_address = toDelete->next_address;
-    } else {
-        MemoryNode* prevNode = MemoryManager_GetNode(context.prevAddress);
-        if (!prevNode) return;
-        prevNode->next_address = toDelete->next_address;
-    }
-    context.deleteStep = DEL_STEP_FREE;
-}
-
-static void Delete_Free(void) {
-    if (context.deleteStep != DEL_STEP_FREE) {
-        showError = true;
-        sprintf(errorMsg, "SIMULATION ERROR: You must relink before free().");
-        return;
-    }
-    MemoryManager_Free(context.toDeleteAddress);
-    RemoveVisualNode(context.toDeleteAddress);
-    context.deleteStep = DEL_STEP_DONE;
-    context.type = FUNC_NONE;
-    simStatus = SIM_IDLE;
     ResetTraversal();
 }
 
@@ -423,7 +518,27 @@ static void DrawWorldTraverseBox(VisualNode* vn, bool pointToPointerField) {
 }
 
 void LinkedListVisualizer_Draw(void) {
-    // 1. Draw Connections
+    // 1. Draw Nodes (including potential temp node)
+    for (int i = 0; i < visualNodeCount; i++) {
+        VisualNode* vn = &visualNodes[i];
+        Rectangle rec = { vn->position.x, vn->position.y, 100, 50 };
+        
+        Color bgColor = WHITE;
+        if (vn->address == context.newNodeAddress) bgColor = (Color){ 200, 255, 200, 255 };
+        if (vn->address == context.toDeleteAddress) bgColor = (Color){ 255, 200, 200, 255 };
+        if (vn->address == curr_address) bgColor = (Color){ 255, 255, 200, 255 };
+
+        DrawRectangleRec(rec, bgColor);
+        DrawRectangleLinesEx(rec, 1, BLACK);
+        DrawLineEx((Vector2){ vn->position.x + 50, vn->position.y }, (Vector2){ vn->position.x + 50, vn->position.y + 50 }, 1, BLACK);
+        char val[4]; sprintf(val, "%d", (int)vn->data);
+        DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, BLACK);
+        DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, BLACK);
+        char addr[16]; sprintf(addr, "0x%X", vn->address);
+        DrawText(addr, vn->position.x, vn->position.y - 12, 10, DARKGRAY);
+    }
+
+    // 2. Draw Connections on top
     int current = head_address;
     while (current != 0) {
         MemoryNode* node = MemoryManager_GetNode(current);
@@ -432,7 +547,7 @@ void LinkedListVisualizer_Draw(void) {
             VisualNode* nextVn = GetVisualNode(node->next_address);
             if (nextVn) {
                 Rectangle pointerBox = GetPointerFieldBox(vn);
-                Vector2 start = { pointerBox.x + pointerBox.width / 2.0f, pointerBox.y };
+                Vector2 start = { pointerBox.x + pointerBox.width / 2.0f, pointerBox.y + pointerBox.height / 2.0f };
                 Vector2 end = { nextVn->position.x, nextVn->position.y + 25 };
                 DrawCurvedArrow(start, end, BLACK);
             }
@@ -440,31 +555,31 @@ void LinkedListVisualizer_Draw(void) {
         current = node->next_address;
     }
 
-    // 2. Draw Nodes
-    current = head_address;
-    while (current != 0) {
-        VisualNode* vn = GetVisualNode(current);
-        if (vn) {
-            Rectangle rec = { vn->position.x, vn->position.y, 100, 50 };
-            DrawRectangleRec(rec, WHITE);
-            DrawRectangleLinesEx(rec, 1, BLACK);
-            DrawLineEx((Vector2){ vn->position.x + 50, vn->position.y }, (Vector2){ vn->position.x + 50, vn->position.y + 50 }, 1, BLACK);
-            char val[4]; sprintf(val, "%d", (int)vn->data);
-            DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, BLACK);
-            DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, BLACK);
-            char addr[16]; sprintf(addr, "0x%X", current);
-            DrawText(addr, vn->position.x, vn->position.y - 12, 10, DARKGRAY);
+    // Draw temp node connections if any
+    for (int i = 0; i < visualNodeCount; i++) {
+        VisualNode* vn = &visualNodes[i];
+        MemoryNode* node = MemoryManager_GetNode(vn->address);
+        if (node && node->next_address != 0) {
+            bool inMainList = false;
+            int c = head_address;
+            while(c != 0) { if(c == vn->address) { inMainList = true; break; } c = MemoryManager_GetNode(c)->next_address; }
+            
+            if (!inMainList) {
+                VisualNode* nextVn = GetVisualNode(node->next_address);
+                if (nextVn) {
+                    Rectangle pointerBox = GetPointerFieldBox(vn);
+                    Vector2 start = { pointerBox.x + pointerBox.width / 2.0f, pointerBox.y + pointerBox.height / 2.0f };
+                    Vector2 end = { nextVn->position.x, nextVn->position.y + 25 };
+                    DrawCurvedArrow(start, end, DARKGRAY);
+                }
+            }
         }
-        current = MemoryManager_GetNode(current)->next_address;
     }
-
-    (void)0;
 }
 
 int LinkedListVisualizer_GetTraversalAddress(void) {
     if (simStatus != SIM_EXECUTING) return 0;
-    if (curr_address != 0) return curr_address;
-    return GetTailAddress();
+    return curr_address;
 }
 
 bool LinkedListVisualizer_IsBusy(void) {
@@ -474,7 +589,6 @@ bool LinkedListVisualizer_IsBusy(void) {
 void LinkedListVisualizer_CancelInteraction(void) {
     simStatus = SIM_IDLE;
     context.type = FUNC_NONE;
-    context.deleteStep = DEL_STEP_TRAVERSE;
     context.prevAddress = 0;
     context.toDeleteAddress = 0;
     showError = false;
@@ -492,17 +606,9 @@ void LinkedListVisualizer_DrawUI(void) {
     DrawText("Stack Memory", stackBox.x + 10, stackBox.y + 10, 13, BLACK);
 
     VisualNode* headNode = GetVisualNode(head_address);
-    Rectangle headBox = { stackBox.x + 20, stackBox.y + 45, 60, 24 };
-    if (headNode) {
-        Vector2 headTip = GetNodeLeftCenterScreen(headNode);
-        DrawStackPointerBox("head", headBox, headTip, (Color){ 0, 212, 255, 255 }, false);
-    } else {
-        Vector2 headTip = (Vector2){ headBox.x + 120, headBox.y + 12 };
-        DrawStackPointerBox("head", headBox, headTip, (Color){ 0, 212, 255, 255 }, true);
-    }
-
+    
     if (simStatus == SIM_EXECUTING) {
-        Rectangle travBox = { stackBox.x + 20, stackBox.y - 35, 85, 24 };
+        Rectangle travBox = { stackBox.x + 20, stackBox.y + 40, 85, 24 };
         if (curr_address != 0) {
             VisualNode* travNode = GetVisualNode(curr_address);
             if (travNode) {
@@ -511,20 +617,11 @@ void LinkedListVisualizer_DrawUI(void) {
                 Vector2 travTip = isNull ? GetPointerFieldCenterScreen(travNode) : GetNodeLeftCenterScreen(travNode);
                 DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, isNull);
             }
-        } else {
-            VisualNode* tail = GetVisualNode(GetTailAddress());
-            if (tail) {
-                Vector2 travTip = GetPointerFieldCenterScreen(tail);
-                DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, true);
-            } else {
-                Vector2 travTip = (Vector2){ travBox.x + 150, travBox.y + 12 };
-                DrawStackPointerBox("traverse", travBox, travTip, (Color){ 255, 0, 110, 255 }, true);
-            }
         }
     }
 
     if (simStatus == SIM_EXECUTING) {
-        Rectangle execBox = { stackBox.x + 20, stackBox.y - 40, stackBox.width - 40, 30 };
+        Rectangle execBox = { stackBox.x + 20, stackBox.y + 10, stackBox.width - 40, 25 };
         DrawRectangleRec(execBox, LIGHTGRAY);
         DrawRectangleLinesEx(execBox, 1, BLACK);
         char func[64];
@@ -535,10 +632,10 @@ void LinkedListVisualizer_DrawUI(void) {
         } else {
             sprintf(func, "FUNC(List)");
         }
-        DrawText(func, execBox.x + 10, execBox.y + 8, 12, BLACK);
+        DrawText(func, execBox.x + 10, execBox.y + 6, 12, BLACK);
     }
 
-    Rectangle listBox = { stackBox.x + 40, stackBox.y + 120, 160, 35 };
+    Rectangle listBox = { stackBox.x + 40, stackBox.y + 140, 160, 35 };
     DrawRectangleRec(listBox, WHITE);
     DrawRectangleLinesEx(listBox, 1, BLACK);
     DrawText("List", listBox.x + 55, listBox.y + 10, 13, BLACK);
@@ -546,13 +643,16 @@ void LinkedListVisualizer_DrawUI(void) {
     if (headNode) {
         Vector2 listTip = GetNodeLeftCenterScreen(headNode);
         DrawStraightArrow((Vector2){ listBox.x + listBox.width, listBox.y + listBox.height / 2.0f }, listTip, BLACK);
+    } else {
+        Vector2 listTip = (Vector2){ listBox.x + listBox.width + 100, listBox.y + listBox.height / 2.0f };
+        DrawStackPointerBox("List", listBox, listTip, BLACK, true);
     }
 
     if (simStatus == SIM_EXECUTING) {
         if (context.currentPos <= 1) {
-            Rectangle travBox = { stackBox.x + stackBox.width + 30, listBox.y + 5, 90, 24 };
+            Rectangle travLabelBox = { stackBox.x + stackBox.width + 30, listBox.y + 5, 90, 24 };
             Vector2 travTip = (Vector2){ listBox.x + listBox.width / 2.0f, listBox.y + listBox.height / 2.0f };
-            DrawStackPointerBox("Traverse", travBox, travTip, BLACK, false);
+            DrawStackPointerBox("Traverse", travLabelBox, travTip, BLACK, false);
         } else {
             MemoryNode* travMem = MemoryManager_GetNode(curr_address);
             bool isNull = (travMem && travMem->next_address == 0);
@@ -560,10 +660,19 @@ void LinkedListVisualizer_DrawUI(void) {
         }
     }
 
-    char headTxt[32]; sprintf(headTxt, "head: 0x%X", head_address);
-    DrawText(headTxt, stackBox.x + 20, stackBox.y + 60, 13, BLACK);
+    char listTxt[32]; sprintf(listTxt, "List: 0x%X", head_address);
+    DrawText(listTxt, stackBox.x + 20, stackBox.y + 115, 13, BLACK);
     char currTxt[32]; sprintf(currTxt, "curr: 0x%X", curr_address);
-    DrawText(currTxt, stackBox.x + 20, stackBox.y + 85, 13, BLACK);
+    DrawText(currTxt, stackBox.x + 20, stackBox.y + 185, 13, BLACK);
+
+    // Pseudocode Display
+    if (simStatus == SIM_EXECUTING) {
+        if (context.type == FUNC_INSERT) {
+            DrawPseudocode(sw - 320, 100, insertPseudocode, 12, context.currentLine);
+        } else if (context.type == FUNC_DELETE) {
+            DrawPseudocode(sw - 320, 100, deletePseudocode, 13, context.currentLine);
+        }
+    }
 
     // 2. Bottom Function Pills
     DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY);
@@ -581,24 +690,15 @@ void LinkedListVisualizer_DrawUI(void) {
 
     // 3. Conditional Function Keys (Bottom Right/Center)
     if (simStatus == SIM_EXECUTING) {
-        if (context.type == FUNC_INSERT) {
-            DrawText("INSERT FUNCTION KEYS", 400, sh - 100, 11, DARKGRAY);
-            Rectangle travKey = { 400, (float)sh - 80, 100, 45 };
-            Rectangle execKey = { 510, (float)sh - 80, 100, 45 };
-
-            if (GuiButton(travKey, "Trav")) LinkedListVisualizer_TraverseStep();
-            if (GuiButton(execKey, "Insert")) LinkedListVisualizer_ExecuteStep();
-        } else if (context.type == FUNC_DELETE) {
-            DrawText("DELETE FUNCTION KEYS", 360, sh - 100, 11, DARKGRAY);
-            Rectangle travKey = { 360, (float)sh - 80, 90, 45 };
-            Rectangle delKey = { 455, (float)sh - 80, 100, 45 };
-            Rectangle linkKey = { 560, (float)sh - 80, 100, 45 };
-            Rectangle freeKey = { 665, (float)sh - 80, 90, 45 };
-
-            if (GuiButton(travKey, "Trav")) LinkedListVisualizer_TraverseStep();
-            if (GuiButton(delKey, "toDelete")) Delete_SetToDelete();
-            if (GuiButton(linkKey, "Relink")) Delete_Relink();
-            if (GuiButton(freeKey, "Free")) Delete_Free();
+        DrawText("ALGORITHM STEPS", 400, sh - 100, 11, DARKGRAY);
+        Rectangle nextKey = { 400, (float)sh - 80, 200, 45 };
+        if (GuiButton(nextKey, "NEXT STEP")) {
+            LinkedListVisualizer_NextStep();
+        }
+        
+        Rectangle cancelKey = { 610, (float)sh - 80, 100, 45 };
+        if (GuiButton(cancelKey, "CANCEL")) {
+            LinkedListVisualizer_CancelInteraction();
         }
     }
 
@@ -680,6 +780,8 @@ void LinkedListVisualizer_DrawUI(void) {
                     }
                 }
                 ResetTraversal();
+                context.currentLine = 0;
+                context.totalLines = 12;
                 simStatus = SIM_EXECUTING;
             }
         } else if (context.type == FUNC_DELETE) {
@@ -702,7 +804,11 @@ void LinkedListVisualizer_DrawUI(void) {
                     context.targetVal = atoi(delValBuf);
                 }
                 StartDeleteExecution();
-                if (!showError) simStatus = SIM_EXECUTING;
+                if (!showError) {
+                    context.currentLine = 0;
+                    context.totalLines = 13;
+                    simStatus = SIM_EXECUTING;
+                }
             }
         }
     }

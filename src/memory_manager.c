@@ -50,10 +50,6 @@ void MemoryManager_Draw(Rectangle area, int travAddress) {
     DrawRectangleRec(area, RAYWHITE);
     DrawRectangleLinesEx(area, 2, BLACK);
 
-    if (travAddress == 0) {
-        DrawText("trav -> NULL", area.x + 6, area.y + 4, fontSize, (Color){ 255, 0, 110, 255 });
-    }
-
     for (int i = 0; i < visibleNodes && i < MAX_MEM_NODES; i++) {
         Rectangle cell = { area.x, area.y + i * cellHeight, area.width, cellHeight };
         DrawRectangleLinesEx(cell, 1, BLACK);

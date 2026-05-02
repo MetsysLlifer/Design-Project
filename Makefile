@@ -43,4 +43,7 @@ $(BIN_DIR) $(OBJ_DIR):
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all clean
+run: all
+	./$(TARGET)
+
+.PHONY: all clean run

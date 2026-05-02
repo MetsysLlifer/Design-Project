@@ -32,14 +32,6 @@ typedef enum {
     DELETE_ELEMENT
 } DeleteMode;
 
-typedef enum {
-    DEL_STEP_TRAVERSE,
-    DEL_STEP_SET_TODELETE,
-    DEL_STEP_RELINK,
-    DEL_STEP_FREE,
-    DEL_STEP_DONE
-} DeleteStep;
-
 typedef struct {
     int address;
     Vector2 position;
@@ -54,9 +46,11 @@ typedef struct {
     int currentPos;
     InsertMode insertMode;
     DeleteMode deleteMode;
-    DeleteStep deleteStep;
     int prevAddress;
     int toDeleteAddress;
+    int newNodeAddress;
+    int currentLine;
+    int totalLines;
 } SimContext;
 
 void LinkedListVisualizer_Init(void);
@@ -68,7 +62,7 @@ void LinkedListVisualizer_SetSpawnCenter(Vector2 center);
 void LinkedListVisualizer_SetCamera(Camera2D cam);
 void LinkedListVisualizer_StartInsert(void);
 void LinkedListVisualizer_TraverseStep(void);
-void LinkedListVisualizer_ExecuteStep(void);
+void LinkedListVisualizer_NextStep(void);
 void LinkedListVisualizer_CenterCamera(Camera2D *cam);
 void LinkedListVisualizer_AddNodeAt(char value, Vector2 worldPos);
 void LinkedListVisualizer_DeleteActive(void);
