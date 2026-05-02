@@ -29,25 +29,45 @@ We use a standardized "Mental Model" for memory visualization:
 | **Traversal** | **Pink/Magenta** | The `curr` or `traverse` pointer. |
 | **Highlighting** | **Yellow/Red/Green** | Use Yellow for current focus, Red for deletion, Green for new allocation. |
 
-## 4. Animation Principles
+## 4. Information Display Standards
+To ensure clarity, information must be displayed using the following patterns:
+
+### A. Node/Element Anatomy
+- **Standard Dimensions**: 100x50 pixels for linked nodes, 55x55 for array elements.
+- **Field Dividers**: Nodes must have a vertical line separating the `data` and `next` fields.
+- **Labels**: Every node must display its physical memory address (e.g., `0x1004`) above the box in `DARKGREEN`.
+- **Contrast**: Use `WHITE` text for data inside colored nodes and `DARKGREEN` for labels on light backgrounds.
+
+### B. Pointer & Data Referencing
+- **Stack-to-Heap**: Use **Straight Arrows** (Solid Black) to show a stack pointer (e.g., `List`) referencing a heap object.
+- **Heap-to-Heap**: Use **Curved Arrows** (Quadratic Bezier) for internal connections (e.g., `node->next`).
+- **NULL Representation**: Point to a dedicated dark-grey box labeled "NULL" rather than vanishing.
+- **Arrowheads**: Must be large and robust (triangle based) to ensure directionality is unmistakable even during movement.
+
+### C. Communication (Popups)
+- **Notifications**: Use for automatic logic adjustments (e.g., index clamping). Requires a "PROCEED" button.
+- **Logic Errors**: Use for invalid user input (e.g., "Array Full"). Requires an "OK" button.
+- **Styling**: Popups must be centered, have a thick `4px` border, and dim the background elements slightly.
+
+## 5. Animation Principles
 - **Smooth Lerping**: Objects should not jump instantly. Use `position += (target - position) * 0.15f`.
 - **Line Growth**: Connecting arrows should use `lineProgress` (0.0 to 1.0) to "grow" from the source to the target.
 - **Spawn Effect**: New nodes should slide into the view (e.g., spawn at `y - 100` and lerp to target).
+- **Physical Shifting**: In array implementations, elements should physically slide left/right during insertion/deletion to emphasize the $O(n)$ cost.
 
-## 5. Pseudocode Integration
-- Define an array of strings representing the algorithm steps.
-- Use a `currentLine` counter in your `SimContext`.
-- In `NextStep()`, use a `switch(currentLine)` to apply logic and advance `currentLine`.
-- Always reset `lineProgress = 0.0f` when a pointer changes to trigger the growth animation.
+## 6. Interaction Feedback
+- **Dragging**: Highlight the node with a slightly larger border or "glow" when picked up.
+- **Execution Path**: A blue arrow must point from the CPU "PC" address directly to the currently active line in the algorithm panel.
+- **PC Counter**: The Program Counter (PC) should increment by 4 for every line of pseudocode to simulate real instruction fetching.
 
-## 6. Layout Requirements
+## 7. Layout Requirements
 - **Top Left**: Back button and "THE EXECUTOR" (CPU) panel.
 - **Left Center**: "THE STACK" panel containing pointers and local variables.
 - **Top Right (Left of Memory)**: "ALGORITHM" (Pseudocode) panel.
 - **Far Right**: "THE HEAP" (Memory Manager) panel.
 - **Bottom**: Function control buttons (e.g., Insert, Delete, Push, Pop).
 
-## 7. Integration Step
+## 8. Integration Step
 After creating the source files:
 1. Add the headers to `src/main.c`.
 2. Add the ADT to `ADTType` enum.
