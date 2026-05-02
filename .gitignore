@@ -1,1 +1,13 @@
-/PROJECT_SPEC.md
+# Build artifacts
+bin/
+obj/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build/
+
+# OS files
+.DS_Store

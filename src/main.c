@@ -2,6 +2,8 @@
 #include "raymath.h"
 #include "array_visualizer.h"
 #include "linked_list_visualizer.h"
+#include "stack_visualizer.h"
+#include "queue_visualizer.h"
 #include "graph_visualizer.h"
 #include "memory_manager.h"
 #include <stdio.h>
@@ -22,6 +24,8 @@ bool showMemoryVis = true;
 void InitApp(void) {
     ArrayVisualizer_Init();
     LinkedListVisualizer_Init();
+    StackVisualizer_Init();
+    QueueVisualizer_Init();
     GraphVisualizer_Init();
     camera.target = (Vector2){ 0, 0 };
     camera.offset = (Vector2){ 640, 360 };
@@ -44,12 +48,27 @@ void UpdateCanvas(void) {
         camera.target = Vector2Add(camera.target, delta);
     }
     Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
-    if (selectedADT == ADT_LIST && selectedImpl == IMPL_LINKED) {
-        Vector2 screenCenter = { (float)GetScreenWidth() / 2.0f, (float)GetScreenHeight() / 2.0f };
-        Vector2 centerWorldPos = GetScreenToWorld2D(screenCenter, camera);
-        LinkedListVisualizer_SetSpawnCenter(centerWorldPos);
-        LinkedListVisualizer_SetCamera(camera);
-        LinkedListVisualizer_Update(mouseWorldPos, camera.zoom);
+    Vector2 screenCenter = { (float)GetScreenWidth() / 2.0f, (float)GetScreenHeight() / 2.0f };
+    Vector2 centerWorldPos = GetScreenToWorld2D(screenCenter, camera);
+
+    if (selectedADT == ADT_LIST) {
+        if (selectedImpl == IMPL_LINKED) {
+            LinkedListVisualizer_SetSpawnCenter(centerWorldPos);
+            LinkedListVisualizer_SetCamera(camera);
+            LinkedListVisualizer_Update(mouseWorldPos, camera.zoom);
+        } else {
+            ArrayVisualizer_SetSpawnCenter(centerWorldPos);
+            ArrayVisualizer_SetCamera(camera);
+            ArrayVisualizer_Update(mouseWorldPos, camera.zoom);
+        }
+    } else if (selectedADT == ADT_STACK) {
+        StackVisualizer_SetSpawnCenter(centerWorldPos);
+        StackVisualizer_SetCamera(camera);
+        StackVisualizer_Update(mouseWorldPos, camera.zoom);
+    } else if (selectedADT == ADT_QUEUE) {
+        QueueVisualizer_SetSpawnCenter(centerWorldPos);
+        QueueVisualizer_SetCamera(camera);
+        QueueVisualizer_Update(mouseWorldPos, camera.zoom);
     }
 }
 
@@ -71,9 +90,15 @@ int main(void) {
             if (currentScene == SCENE_MAIN_MENU) {
                 showExitConfirm = true;
             } else if (currentScene == SCENE_VISUALIZER) {
-                if (selectedADT == ADT_LIST && selectedImpl == IMPL_LINKED && LinkedListVisualizer_IsBusy()) {
-                    showCancelConfirm = true;
+                bool isBusy = false;
+                if (selectedADT == ADT_LIST) {
+                    if (selectedImpl == IMPL_LINKED) isBusy = LinkedListVisualizer_IsBusy();
+                    else if (selectedImpl == IMPL_ARRAY) isBusy = ArrayVisualizer_IsBusy();
                 }
+                else if (selectedADT == ADT_STACK) isBusy = StackVisualizer_IsBusy();
+                else if (selectedADT == ADT_QUEUE) isBusy = QueueVisualizer_IsBusy();
+                
+                if (isBusy) showCancelConfirm = true;
             }
         }
 
@@ -90,24 +115,40 @@ int main(void) {
 
             case SCENE_START:
                 DrawText("SELECT DATA STRUCTURE", 50, 50, 30, BLACK);
-                if (GuiButton((Rectangle){ 50, 120, 250, 45 }, "LIST (Linked-List)")) { selectedADT = ADT_LIST; selectedImpl = IMPL_LINKED; LinkedListVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
+                if (GuiButton((Rectangle){ 50, 120, 300, 45 }, "LIST (Linked-List)")) { selectedADT = ADT_LIST; selectedImpl = IMPL_LINKED; LinkedListVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
+                if (GuiButton((Rectangle){ 50, 175, 300, 45 }, "LIST (Array-based)")) { selectedADT = ADT_LIST; selectedImpl = IMPL_ARRAY; ArrayVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
+                if (GuiButton((Rectangle){ 50, 230, 300, 45 }, "STACK (Linked-List)")) { selectedADT = ADT_STACK; StackVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
+                if (GuiButton((Rectangle){ 50, 285, 300, 45 }, "QUEUE (Linked-List)")) { selectedADT = ADT_QUEUE; QueueVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
+                
                 if (GuiButton((Rectangle){ 50, 600, 150, 40 }, "BACK")) currentScene = SCENE_MAIN_MENU;
                 break;
 
             case SCENE_VISUALIZER:
                 BeginMode2D(camera);
-                    if (selectedADT == ADT_LIST && selectedImpl == IMPL_LINKED) LinkedListVisualizer_Draw();
+                    if (selectedADT == ADT_LIST) {
+                        if (selectedImpl == IMPL_LINKED) LinkedListVisualizer_Draw();
+                        else if (selectedImpl == IMPL_ARRAY) ArrayVisualizer_Draw();
+                    }
+                    else if (selectedADT == ADT_STACK) StackVisualizer_Draw();
+                    else if (selectedADT == ADT_QUEUE) QueueVisualizer_Draw();
                 EndMode2D();
 
-                if (selectedADT == ADT_LIST && selectedImpl == IMPL_LINKED) {
-                    LinkedListVisualizer_DrawUI();
+                if (selectedADT == ADT_LIST) {
+                    if (selectedImpl == IMPL_LINKED) LinkedListVisualizer_DrawUI();
+                    else if (selectedImpl == IMPL_ARRAY) ArrayVisualizer_DrawUI();
                 }
+                else if (selectedADT == ADT_STACK) StackVisualizer_DrawUI();
+                else if (selectedADT == ADT_QUEUE) QueueVisualizer_DrawUI();
 
                 if (showMemoryVis) {
                     int travAddr = 0;
-                    if (selectedADT == ADT_LIST && selectedImpl == IMPL_LINKED) {
-                        travAddr = LinkedListVisualizer_GetTraversalAddress();
+                    if (selectedADT == ADT_LIST) {
+                        if (selectedImpl == IMPL_LINKED) travAddr = LinkedListVisualizer_GetTraversalAddress();
+                        // Array implementation usually uses direct indexing, but we can pass 0
                     }
+                    else if (selectedADT == ADT_STACK) travAddr = StackVisualizer_GetTraversalAddress();
+                    else if (selectedADT == ADT_QUEUE) travAddr = QueueVisualizer_GetTraversalAddress();
+                    
                     MemoryManager_Draw((Rectangle){ (float)sw - 250, 50, 200, 600 }, travAddr);
                 }
 
@@ -131,7 +172,12 @@ int main(void) {
             DrawText("CANCEL CURRENT STEP?", box.x + 70, box.y + 25, 16, BLACK);
             DrawText("This will exit the ongoing insertion/deletion.", box.x + 40, box.y + 70, 12, DARKGRAY);
             if (GuiButton((Rectangle){ box.x + 70, box.y + 110, 110, 35 }, "CANCEL")) {
-                LinkedListVisualizer_CancelInteraction();
+                if (selectedADT == ADT_LIST) {
+                    if (selectedImpl == IMPL_LINKED) LinkedListVisualizer_CancelInteraction();
+                    else if (selectedImpl == IMPL_ARRAY) ArrayVisualizer_CancelInteraction();
+                }
+                else if (selectedADT == ADT_STACK) StackVisualizer_CancelInteraction();
+                else if (selectedADT == ADT_QUEUE) QueueVisualizer_CancelInteraction();
                 showCancelConfirm = false;
             }
             if (GuiButton((Rectangle){ box.x + 220, box.y + 110, 110, 35 }, "STAY")) showCancelConfirm = false;

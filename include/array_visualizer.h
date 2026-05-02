@@ -5,17 +5,14 @@
 #include <stdbool.h>
 
 void ArrayVisualizer_Init(void);
-void ArrayVisualizer_Update(void);
-void ArrayVisualizer_Draw(Rectangle area);
-void ArrayVisualizer_DrawExplanation(Rectangle area);
-void ArrayVisualizer_StartSorting(void);
+void ArrayVisualizer_Update(Vector2 mouseWorldPos, float zoom);
+void ArrayVisualizer_Draw(void);
+void ArrayVisualizer_DrawUI(void);
 
-// Playback controls
-void ArrayVisualizer_TogglePause(void);
-void ArrayVisualizer_SetSpeed(float newSpeed);
-float ArrayVisualizer_GetSpeed(void);
-bool ArrayVisualizer_IsPaused(void);
-void ArrayVisualizer_StepForward(void);
-void ArrayVisualizer_StepBackward(void);
+void ArrayVisualizer_SetSpawnCenter(Vector2 center);
+void ArrayVisualizer_SetCamera(Camera2D cam);
+void ArrayVisualizer_NextStep(void);
+bool ArrayVisualizer_IsBusy(void);
+void ArrayVisualizer_CancelInteraction(void);
 
 #endif
