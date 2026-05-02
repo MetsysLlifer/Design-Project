@@ -11,7 +11,7 @@
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 
-typedef enum { SCENE_MAIN_MENU, SCENE_START, SCENE_VISUALIZER } AppScene;
+typedef enum { SCENE_MAIN_MENU, SCENE_START, SCENE_ARRAY_VERSION_SELECT, SCENE_VISUALIZER } AppScene;
 typedef enum { ADT_LIST, ADT_STACK, ADT_QUEUE } ADTType;
 typedef enum { IMPL_ARRAY, IMPL_LINKED, IMPL_CURSOR } ImplType;
 
@@ -22,7 +22,7 @@ Camera2D camera = { 0 };
 bool showMemoryVis = true;
 
 void InitApp(void) {
-    ArrayVisualizer_Init();
+    ArrayVisualizer_Init(ARR_V1);
     LinkedListVisualizer_Init();
     StackVisualizer_Init();
     QueueVisualizer_Init();
@@ -114,13 +114,82 @@ int main(void) {
                 break;
 
             case SCENE_START:
-                DrawText("SELECT DATA STRUCTURE", 50, 50, 30, BLACK);
-                if (GuiButton((Rectangle){ 50, 120, 300, 45 }, "LIST (Linked-List)")) { selectedADT = ADT_LIST; selectedImpl = IMPL_LINKED; LinkedListVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
-                if (GuiButton((Rectangle){ 50, 175, 300, 45 }, "LIST (Array-based)")) { selectedADT = ADT_LIST; selectedImpl = IMPL_ARRAY; ArrayVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
-                if (GuiButton((Rectangle){ 50, 230, 300, 45 }, "STACK (Linked-List)")) { selectedADT = ADT_STACK; StackVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
-                if (GuiButton((Rectangle){ 50, 285, 300, 45 }, "QUEUE (Linked-List)")) { selectedADT = ADT_QUEUE; QueueVisualizer_Init(); currentScene = SCENE_VISUALIZER; }
+                DrawText("SELECT DATA STRUCTURE & IMPLEMENTATION", sw/2 - MeasureText("SELECT DATA STRUCTURE & IMPLEMENTATION", 25)/2, 50, 25, BLACK);
                 
-                if (GuiButton((Rectangle){ 50, 600, 150, 40 }, "BACK")) currentScene = SCENE_MAIN_MENU;
+                float colWidth = 350;
+                float startX = (sw - (colWidth * 3)) / 2.0f;
+                float baseY = 150;
+
+                // Column 1: Linked-List (Orange Stack Theme)
+                DrawRectangle(startX, baseY - 40, colWidth - 20, 35, (Color){ 255, 245, 230, 255 });
+                DrawRectangleLinesEx((Rectangle){ startX, baseY - 40, colWidth - 20, 35 }, 2, (Color){ 255, 161, 0, 255 });
+                DrawText("LINKED-LIST BASED", startX + 60, baseY - 30, 18, (Color){ 200, 100, 0, 255 });
+                
+                if (GuiButton((Rectangle){ startX, baseY, colWidth - 20, 45 }, "LIST (Linked-List)")) { 
+                    selectedADT = ADT_LIST; selectedImpl = IMPL_LINKED; LinkedListVisualizer_Init(); currentScene = SCENE_VISUALIZER; 
+                }
+                if (GuiButton((Rectangle){ startX, baseY + 55, colWidth - 20, 45 }, "STACK (Linked-List)")) { 
+                    selectedADT = ADT_STACK; selectedImpl = IMPL_LINKED; StackVisualizer_Init(); currentScene = SCENE_VISUALIZER; 
+                }
+                if (GuiButton((Rectangle){ startX, baseY + 110, colWidth - 20, 45 }, "QUEUE (Linked-List)")) { 
+                    selectedADT = ADT_QUEUE; selectedImpl = IMPL_LINKED; QueueVisualizer_Init(); currentScene = SCENE_VISUALIZER; 
+                }
+
+                // Column 2: Array-Based (Green Heap Theme)
+                DrawRectangle(startX + colWidth, baseY - 40, colWidth - 20, 35, (Color){ 245, 255, 245, 255 });
+                DrawRectangleLinesEx((Rectangle){ startX + colWidth, baseY - 40, colWidth - 20, 35 }, 2, DARKGREEN);
+                DrawText("ARRAY-BASED", startX + colWidth + 85, baseY - 30, 18, DARKGREEN);
+                
+                if (GuiButton((Rectangle){ startX + colWidth, baseY, colWidth - 20, 45 }, "LIST (Array-based)")) { 
+                    selectedADT = ADT_LIST; selectedImpl = IMPL_ARRAY; currentScene = SCENE_ARRAY_VERSION_SELECT; 
+                }
+                // Placeholder buttons for future array-based structures
+                GuiSetState(STATE_DISABLED);
+                GuiButton((Rectangle){ startX + colWidth, baseY + 55, colWidth - 20, 45 }, "STACK (Array-based)");
+                GuiButton((Rectangle){ startX + colWidth, baseY + 110, colWidth - 20, 45 }, "QUEUE (Array-based)");
+                GuiSetState(STATE_NORMAL);
+
+                // Column 3: Cursor-Based (Cool Blue CPU Theme)
+                DrawRectangle(startX + colWidth * 2, baseY - 40, colWidth - 20, 35, (Color){ 230, 240, 255, 255 });
+                DrawRectangleLinesEx((Rectangle){ startX + colWidth * 2, baseY - 40, colWidth - 20, 35 }, 2, DARKBLUE);
+                DrawText("CURSOR-BASED", startX + colWidth * 2 + 80, baseY - 30, 18, DARKBLUE);
+                
+                Rectangle cursorBox = { startX + colWidth * 2, baseY, colWidth - 20, 155 };
+                DrawRectangleLinesEx(cursorBox, 1, GRAY);
+                DrawText("Coming Soon!", cursorBox.x + 85, cursorBox.y + 50, 20, DARKGRAY);
+                DrawText("This implementation style will", cursorBox.x + 35, cursorBox.y + 85, 12, GRAY);
+                DrawText("be added in future development.", cursorBox.x + 32, cursorBox.y + 105, 12, GRAY);
+
+                if (GuiButton((Rectangle){ 50, sh - 70, 150, 40 }, "BACK")) currentScene = SCENE_MAIN_MENU;
+                break;
+
+            case SCENE_ARRAY_VERSION_SELECT:
+                DrawText("SELECT ARRAY IMPLEMENTATION VERSION", sw/2 - MeasureText("SELECT ARRAY IMPLEMENTATION VERSION", 25)/2, 100, 25, BLACK);
+                
+                float vStartX = sw/2 - 200;
+                float vStartY = 200;
+                float vWidth = 400;
+                float vHeight = 60;
+                float vGap = 15;
+
+                if (GuiButton((Rectangle){ vStartX, vStartY, vWidth, vHeight }, "V1: Standard Static\n(Array in Static Struct)")) {
+                    ArrayVisualizer_Init(ARR_V1);
+                    currentScene = SCENE_VISUALIZER;
+                }
+                if (GuiButton((Rectangle){ vStartX, vStartY + vHeight + vGap, vWidth, vHeight }, "V2: Heap Structure (Static)\n(Struct on Heap, Fixed Array)")) {
+                    ArrayVisualizer_Init(ARR_V2); 
+                    currentScene = SCENE_VISUALIZER;
+                }
+                if (GuiButton((Rectangle){ vStartX, vStartY + (vHeight + vGap) * 2, vWidth, vHeight }, "V3: Dynamic Array\n(Static Struct, Malloc'd Array)")) {
+                    ArrayVisualizer_Init(ARR_V3);
+                    currentScene = SCENE_VISUALIZER;
+                }
+                if (GuiButton((Rectangle){ vStartX, vStartY + (vHeight + vGap) * 3, vWidth, vHeight }, "V4: Fully Dynamic\n(Malloc'd Struct & Array)")) {
+                    ArrayVisualizer_Init(ARR_V4);
+                    currentScene = SCENE_VISUALIZER;
+                }
+
+                if (GuiButton((Rectangle){ sw/2 - 75, sh - 100, 150, 40 }, "BACK")) currentScene = SCENE_START;
                 break;
 
             case SCENE_VISUALIZER:

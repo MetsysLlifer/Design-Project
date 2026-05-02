@@ -41,6 +41,18 @@ typedef struct {
     Color color;
 } VisualNode;
 
+typedef enum {
+    ACT_NONE,
+    ACT_MALLOC,
+    ACT_ASSIGN,
+    ACT_TRAVERSE,
+    ACT_LINK,
+    ACT_FREE,
+    ACT_LOGIC, // size++, size--, etc
+    ACT_SHIFT,
+    ACT_COPY
+} AlgAction;
+
 typedef struct {
     ActiveFunc type;
     int targetVal;
@@ -54,6 +66,7 @@ typedef struct {
     int currentLine;
     int totalLines;
     float lineProgress;
+    bool practiceMode;
 } SimContext;
 
 void LinkedListVisualizer_Init(void);

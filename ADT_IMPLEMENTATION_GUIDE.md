@@ -67,10 +67,23 @@ To ensure clarity, information must be displayed using the following patterns:
 - **Far Right**: "THE HEAP" (Memory Manager) panel.
 - **Bottom**: Function control buttons (e.g., Insert, Delete, Push, Pop).
 
-## 8. Integration Step
-After creating the source files:
-1. Add the headers to `src/main.c`.
-2. Add the ADT to `ADTType` enum.
-3. Update `SCENE_START` in `main.c` to add a menu button.
-4. Update `SCENE_VISUALIZER` logic to route `Update`, `Draw`, and `DrawUI` calls to your new module.
-5. Add the source file to the `Makefile`.
+## 8. Array Implementation Versions (Standardization)
+To teach memory management effectively, Array-based ADTs must support four implementation versions, each with a unique setup procedure:
+
+| Version | Name | Memory Characteristics | Setup Procedure |
+|---------|------|------------------------|-----------------|
+| **V1** | **Standard Static** | Array is part of a static/global struct. Size is fixed. | Input `max_size` -> Initialize. |
+| **V2** | **Heap Structure (Static)** | Struct is `malloc`'d on the heap; array inside has fixed size. | `malloc(List)` -> Input `max_size` -> Initialize. |
+| **V3** | **Dynamic Array** | Struct is static, but the data array is `malloc`'d separately. | Input `initial_capacity` -> `malloc(array)`. |
+| **V4** | **Fully Dynamic** | Both the Struct and the data array are `malloc`'d on the heap. | `malloc(List)` -> Input `capacity` -> `malloc(array)`. |
+
+### Resize Simulation (V3 & V4 Only)
+When an operation hits the current `capacity`, the visualizer must not error. Instead:
+1. **Notify**: Show a popup: "Capacity reached. Resizing array (2x)..."
+2. **Procedure**: 
+   - `malloc` a new, larger array on the heap.
+   - Show elements physically copying from the old array to the new one.
+   - `free` the old array and update the stack pointer.
+
+## 9. Integration Step
+... (rest of the file)

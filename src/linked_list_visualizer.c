@@ -15,7 +15,7 @@ static Vector2 spawnCenter = { 0, 0 };
 static Camera2D viewCamera = { 0 };
 
 static SimStatus simStatus = SIM_IDLE;
-static SimContext context = { FUNC_NONE, 0, 0, 0, INSERT_INDEX, DELETE_INDEX, 0, 0, 0, 0, 0, 1.0f };
+static SimContext context = { FUNC_NONE, 0, 0, 0, INSERT_INDEX, DELETE_INDEX, 0, 0, 0, 0, 0, 1.0f, false };
 static char errorMsg[256] = "";
 static bool showError = false;
 
@@ -120,6 +120,42 @@ static void ResetTraversal(void) {
         curr_address = head_address;
         context.currentPos = 1;
     }
+}
+
+static AlgAction GetRequiredAction(void) {
+    if (context.type == FUNC_INSERT) {
+        switch (context.currentLine) {
+            case 0: return ACT_MALLOC;
+            case 1: return ACT_ASSIGN;
+            case 2:
+            case 5:
+            case 7: return ACT_LOGIC;
+            case 3:
+            case 4:
+            case 9:
+            case 10: return ACT_LINK;
+            case 6:
+            case 8: return ACT_TRAVERSE;
+            default: return ACT_NONE;
+        }
+    } else if (context.type == FUNC_DELETE) {
+        switch (context.currentLine) {
+            case 0:
+            case 1:
+            case 5:
+            case 7: return ACT_LOGIC;
+            case 2:
+            case 3:
+            case 9:
+            case 10: return ACT_LINK;
+            case 4:
+            case 11: return ACT_FREE;
+            case 6:
+            case 8: return ACT_TRAVERSE;
+            default: return ACT_NONE;
+        }
+    }
+    return ACT_NONE;
 }
 
 static VisualNode* GetVisualNode(int address) {
