@@ -103,13 +103,13 @@ static void TryExecuteAction(AlgAction selected) {
     if (selected == required) {
         if (ctx.type == Q_FUNC_ENQUEUE) {
             switch (ctx.logicalStep) {
-                case 0: while(ctx.currentLine != 1) QueueVisualizer_NextStep(); ctx.logicalStep = 1; break;
-                case 1: while(ctx.currentLine != 2) QueueVisualizer_NextStep(); ctx.logicalStep = 2; break;
+                case 0: while(ctx.currentLine != 1 && qStatus == Q_EXECUTING) QueueVisualizer_NextStep(); ctx.logicalStep = 1; break;
+                case 1: while(ctx.currentLine != 2 && qStatus == Q_EXECUTING) QueueVisualizer_NextStep(); ctx.logicalStep = 2; break;
                 case 2: while(qStatus == Q_EXECUTING) QueueVisualizer_NextStep(); ctx.logicalStep = 3; break;
             }
         } else {
             switch (ctx.logicalStep) {
-                case 0: while(ctx.currentLine != 4) QueueVisualizer_NextStep(); ctx.logicalStep = 1; break;
+                case 0: while(ctx.currentLine != 4 && qStatus == Q_EXECUTING) QueueVisualizer_NextStep(); ctx.logicalStep = 1; break;
                 case 1: while(qStatus == Q_EXECUTING) QueueVisualizer_NextStep(); ctx.logicalStep = 2; break;
             }
         }

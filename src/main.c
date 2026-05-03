@@ -28,7 +28,7 @@ void InitApp(void) {
     QueueVisualizer_Init();
     GraphVisualizer_Init();
     camera.target = (Vector2){ 0, 0 };
-    camera.offset = (Vector2){ 640, 360 };
+    camera.offset = (Vector2){ (float)GetScreenWidth() / 2.0f, (float)GetScreenHeight() / 2.0f };
     camera.rotation = 0.0f;
     camera.zoom = 1.0f;
 }
@@ -73,9 +73,8 @@ void UpdateCanvas(void) {
 }
 
 int main(void) {
-    const int sw = 1280;
-    const int sh = 720;
-    InitWindow(sw, sh, "DSA Visualizer");
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    InitWindow(1280, 720, "DSA Visualizer");
     SetExitKey(KEY_NULL);
     SetTargetFPS(60);
     InitApp();
@@ -85,6 +84,13 @@ int main(void) {
     bool showCancelConfirm = false;
 
     while (!shouldQuit) {
+        int sw = GetScreenWidth();
+        int sh = GetScreenHeight();
+        
+        if (IsWindowResized()) {
+            camera.offset = (Vector2){ (float)sw / 2.0f, (float)sh / 2.0f };
+        }
+
         if (WindowShouldClose()) showExitConfirm = true;
         if (IsKeyPressed(KEY_ESCAPE)) {
             if (currentScene == SCENE_MAIN_MENU) {
@@ -218,7 +224,7 @@ int main(void) {
                     else if (selectedADT == ADT_STACK) travAddr = StackVisualizer_GetTraversalAddress();
                     else if (selectedADT == ADT_QUEUE) travAddr = QueueVisualizer_GetTraversalAddress();
                     
-                    MemoryManager_Draw((Rectangle){ (float)sw - 250, 50, 200, 600 }, travAddr);
+                    MemoryManager_Draw((Rectangle){ (float)sw - 250, 50, 200, (float)sh - 100 }, travAddr);
                 }
 
                 if (GuiButton((Rectangle){ 20, 20, 80, 30 }, "BACK")) currentScene = SCENE_START;

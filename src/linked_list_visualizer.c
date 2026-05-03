@@ -211,23 +211,24 @@ static void TryExecuteAction(AlgAction selected) {
         if (context.type == FUNC_INSERT) {
             switch (context.logicalStep) {
                 case 0: // Malloc
-                    while (context.currentLine != 1) LinkedListVisualizer_NextStep();
+                    while (context.currentLine != 1 && simStatus == SIM_EXECUTING) LinkedListVisualizer_NextStep();
                     context.logicalStep = 1; break;
                 case 1: // Assign
-                    while (context.currentLine != 2) LinkedListVisualizer_NextStep();
+                    while (context.currentLine != 2 && simStatus == SIM_EXECUTING) LinkedListVisualizer_NextStep();
                     context.logicalStep = 2; break;
                 case 2: // Traverse
                     if (context.currentPos < context.targetPos - 1) {
                         // Keep traversing until we hit the 'for' exit
                         LinkedListVisualizer_NextStep(); 
                         // Auto-advance internal loop logic
-                        while (context.currentLine == 7 || context.currentLine == 8) {
+                        while ((context.currentLine == 7 || context.currentLine == 8) && simStatus == SIM_EXECUTING) {
                             if (context.currentLine == 7 && context.currentPos >= context.targetPos - 1) break;
                             LinkedListVisualizer_NextStep();
                         }
                     } else {
                         // Finished traversal
-                        while (context.currentLine < 9) LinkedListVisualizer_NextStep();
+                        int targetLine = (context.targetPos == 1) ? 3 : 9;
+                        while (context.currentLine < targetLine && simStatus == SIM_EXECUTING) LinkedListVisualizer_NextStep();
                         context.logicalStep = 3;
                     }
                     break;
@@ -240,18 +241,23 @@ static void TryExecuteAction(AlgAction selected) {
                 case 0: // Traverse
                     if (context.currentPos < context.targetPos - 1) {
                         LinkedListVisualizer_NextStep();
-                        while (context.currentLine == 7 || context.currentLine == 8) {
+                        while ((context.currentLine == 7 || context.currentLine == 8) && simStatus == SIM_EXECUTING) {
                             if (context.currentLine == 7 && context.currentPos >= context.targetPos - 1) break;
                             LinkedListVisualizer_NextStep();
                         }
                     } else {
-                        while (context.currentLine < 9) LinkedListVisualizer_NextStep();
+                        int targetLine = (context.targetPos == 1) ? 2 : 9;
+                        while (context.currentLine < targetLine && simStatus == SIM_EXECUTING) LinkedListVisualizer_NextStep();
                         context.logicalStep = 1;
                     }
                     break;
                 case 1: // Link
-                    while (context.currentLine < 11) LinkedListVisualizer_NextStep();
-                    context.logicalStep = 2; break;
+                    {
+                        int targetLine = (context.targetPos == 1) ? 4 : 11;
+                        while (context.currentLine < targetLine && simStatus == SIM_EXECUTING) LinkedListVisualizer_NextStep();
+                        context.logicalStep = 2;
+                    }
+                    break;
                 case 2: // Free
                     while (simStatus == SIM_EXECUTING) LinkedListVisualizer_NextStep();
                     context.logicalStep = 3; break;

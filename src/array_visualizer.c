@@ -122,14 +122,14 @@ static void TryExecuteAction(AlgAction selected) {
     if (selected == required) {
         if (arrStatus == ARR_RESIZING) {
             switch(ctx.logicalStep) {
-                case 0: while(ctx.currentLine != 2) ArrayVisualizer_NextStep(); ctx.logicalStep=1; break;
-                case 1: while(ctx.currentLine != 3) ArrayVisualizer_NextStep(); ctx.logicalStep=2; break;
-                case 2: while(ctx.currentLine != 4) ArrayVisualizer_NextStep(); ctx.logicalStep=3; break;
+                case 0: while(ctx.currentLine != 2 && arrStatus == ARR_RESIZING) ArrayVisualizer_NextStep(); ctx.logicalStep=1; break;
+                case 1: while(ctx.currentLine != 3 && arrStatus == ARR_RESIZING) ArrayVisualizer_NextStep(); ctx.logicalStep=2; break;
+                case 2: while(ctx.currentLine != 4 && arrStatus == ARR_RESIZING) ArrayVisualizer_NextStep(); ctx.logicalStep=3; break;
                 case 3: while(arrStatus == ARR_RESIZING) ArrayVisualizer_NextStep(); ctx.logicalStep=4; break;
             }
         } else if (ctx.type == ARR_FUNC_INSERT) {
             switch(ctx.logicalStep) {
-                case 0: if (ctx.i > ctx.targetPos) { ArrayVisualizer_NextStep(); } else { while(ctx.currentLine != 3) ArrayVisualizer_NextStep(); ctx.logicalStep=1; } break;
+                case 0: if (ctx.i > ctx.targetPos) { ArrayVisualizer_NextStep(); } else { while(ctx.currentLine != 3 && arrStatus == ARR_EXECUTING) ArrayVisualizer_NextStep(); ctx.logicalStep=1; } break;
                 case 1: while(arrStatus == ARR_EXECUTING) ArrayVisualizer_NextStep(); ctx.logicalStep=2; break;
             }
         } else if (ctx.type == ARR_FUNC_DELETE) {

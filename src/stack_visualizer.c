@@ -96,13 +96,13 @@ static void TryExecuteAction(AlgAction selected) {
     if (selected == required) {
         if (ctx.type == STACK_FUNC_PUSH) {
             switch (ctx.logicalStep) {
-                case 0: while(ctx.currentLine != 1) StackVisualizer_NextStep(); ctx.logicalStep = 1; break;
-                case 1: while(ctx.currentLine != 2) StackVisualizer_NextStep(); ctx.logicalStep = 2; break;
+                case 0: while(ctx.currentLine != 1 && stackStatus == STACK_EXECUTING) StackVisualizer_NextStep(); ctx.logicalStep = 1; break;
+                case 1: while(ctx.currentLine != 2 && stackStatus == STACK_EXECUTING) StackVisualizer_NextStep(); ctx.logicalStep = 2; break;
                 case 2: while(stackStatus == STACK_EXECUTING) StackVisualizer_NextStep(); ctx.logicalStep = 3; break;
             }
         } else {
             switch (ctx.logicalStep) {
-                case 0: while(ctx.currentLine != 3) StackVisualizer_NextStep(); ctx.logicalStep = 1; break;
+                case 0: while(ctx.currentLine != 3 && stackStatus == STACK_EXECUTING) StackVisualizer_NextStep(); ctx.logicalStep = 1; break;
                 case 1: while(stackStatus == STACK_EXECUTING) StackVisualizer_NextStep(); ctx.logicalStep = 2; break;
             }
         }
