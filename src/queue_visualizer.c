@@ -22,14 +22,18 @@ static struct {
     QFunc type;
     int targetVal;
     int currentLine;
+    int logicalStep;
     float lineProgress;
     int newNodeAddress;
     int toDeleteAddress;
+    bool practiceMode;
 } ctx;
 
 static QStatus qStatus = Q_IDLE;
 static char valBuf[8] = "10";
 static bool valEditMode = false;
+static char errorMsg[256] = "";
+static bool showError = false;
 
 static const char* enqueuePseudocode[] = {
     "node *temp = malloc(sizeof(node))", // 0
@@ -51,7 +55,76 @@ static const char* dequeuePseudocode[] = {
     "free(temp)"                         // 4
 };
 
-// --- Helpers (Internal only) ---
+static void DrawLogicDiagram(int x, int y, const char* goal, AlgAction iconType) {
+    Rectangle bg = { (float)x - 10, (float)y - 10, 320, 150 };
+    DrawRectangleRec(bg, (Color){ 255, 255, 240, 255 }); 
+    DrawRectangleLinesEx(bg, 2, DARKGRAY);
+    DrawText("LOGIC GOAL", x + 10, y, 14, BLACK);
+    Rectangle iconArea = { (float)x + 110, (float)y + 40, 80, 50 };
+    switch (iconType) {
+        case ACT_MALLOC: DrawRectangleLinesEx(iconArea, 2, DARKGREEN); DrawText("+", iconArea.x + 35, iconArea.y + 15, 20, DARKGREEN); break;
+        case ACT_ASSIGN: DrawRectangleLinesEx(iconArea, 2, DARKGREEN); DrawText("DATA", iconArea.x + 20, iconArea.y + 15, 15, DARKGREEN); break;
+        case ACT_LINK: DrawCircle(iconArea.x + 10, iconArea.y + 25, 5, BLACK); DrawLineEx((Vector2){iconArea.x + 10, iconArea.y + 25}, (Vector2){iconArea.x + 70, iconArea.y + 25}, 2, BLACK); DrawCircle(iconArea.x + 70, iconArea.y + 25, 5, BLACK); break;
+        case ACT_FREE: DrawRectangleLinesEx(iconArea, 2, RED); DrawLine(iconArea.x, iconArea.y, iconArea.x + iconArea.width, iconArea.y + iconArea.height, RED); DrawLine(iconArea.x + iconArea.width, iconArea.y, iconArea.x, iconArea.y + iconArea.height, RED); break;
+        default: break;
+    }
+    DrawText(goal, x + 10, y + 110, 13, DARKGRAY);
+}
+
+static AlgAction GetRequiredAction(void) {
+    if (!ctx.practiceMode) {
+        if (ctx.type == Q_FUNC_ENQUEUE) {
+            switch (ctx.currentLine) {
+                case 0: return ACT_MALLOC; case 1: return ACT_ASSIGN; case 2: case 4: case 6: case 7: return ACT_LINK; case 3: case 5: case 8: return ACT_LOGIC; default: return ACT_NONE;
+            }
+        } else if (ctx.type == Q_FUNC_DEQUEUE) {
+            switch (ctx.currentLine) {
+                case 0: case 3: return ACT_LOGIC; case 1: case 2: return ACT_LINK; case 4: return ACT_FREE; default: return ACT_NONE;
+            }
+        }
+    } else {
+        if (ctx.type == Q_FUNC_ENQUEUE) {
+            switch (ctx.logicalStep) {
+                case 0: return ACT_MALLOC; case 1: return ACT_ASSIGN; case 2: return ACT_LINK; default: return ACT_NONE;
+            }
+        } else {
+            switch (ctx.logicalStep) {
+                case 0: return ACT_LINK; case 1: return ACT_FREE; default: return ACT_NONE;
+            }
+        }
+    }
+    return ACT_NONE;
+}
+
+static void TryExecuteAction(AlgAction selected) {
+    AlgAction required = GetRequiredAction();
+    if (required == ACT_LOGIC) { QueueVisualizer_NextStep(); required = GetRequiredAction(); }
+    if (required == ACT_NONE) return;
+    if (selected == required) {
+        if (ctx.type == Q_FUNC_ENQUEUE) {
+            switch (ctx.logicalStep) {
+                case 0: while(ctx.currentLine != 1) QueueVisualizer_NextStep(); ctx.logicalStep = 1; break;
+                case 1: while(ctx.currentLine != 2) QueueVisualizer_NextStep(); ctx.logicalStep = 2; break;
+                case 2: while(qStatus == Q_EXECUTING) QueueVisualizer_NextStep(); ctx.logicalStep = 3; break;
+            }
+        } else {
+            switch (ctx.logicalStep) {
+                case 0: while(ctx.currentLine != 4) QueueVisualizer_NextStep(); ctx.logicalStep = 1; break;
+                case 1: while(qStatus == Q_EXECUTING) QueueVisualizer_NextStep(); ctx.logicalStep = 2; break;
+            }
+        }
+    } else {
+        showError = true;
+        switch (required) {
+            case ACT_MALLOC: sprintf(errorMsg, "LOGIC ERROR: New node needed on heap."); break;
+            case ACT_ASSIGN: sprintf(errorMsg, "LOGIC ERROR: Set data before linking."); break;
+            case ACT_LINK: sprintf(errorMsg, "LOGIC ERROR: Update pointer connections."); break;
+            case ACT_FREE: sprintf(errorMsg, "LOGIC ERROR: Free memory of dequeued node."); break;
+            default: sprintf(errorMsg, "INVALID ACTION."); break;
+        }
+    }
+}
+
 static VisualNode* GetVisualNode(int address) {
     if (address == 0) return NULL;
     for (int i = 0; i < visualNodeCount; i++) if (visualNodes[i].address == address) return &visualNodes[i];
@@ -59,13 +132,7 @@ static VisualNode* GetVisualNode(int address) {
 }
 
 static void RemoveVisualNode(int address) {
-    for (int i = 0; i < visualNodeCount; i++) {
-        if (visualNodes[i].address == address) {
-            visualNodes[i] = visualNodes[visualNodeCount - 1];
-            visualNodeCount--;
-            return;
-        }
-    }
+    for (int i = 0; i < visualNodeCount; i++) if (visualNodes[i].address == address) { visualNodes[i] = visualNodes[visualNodeCount - 1]; visualNodeCount--; return; }
 }
 
 static bool IsNodeOverlap(Rectangle candidate) {
@@ -77,48 +144,14 @@ static bool IsNodeOverlap(Rectangle candidate) {
 }
 
 static Vector2 FindSpawnPosition(Vector2 basePos) {
-    Rectangle candidate = { basePos.x - 10, basePos.y - 10, 120, 70 };
-    if (!IsNodeOverlap(candidate)) return basePos;
-    const float stepX = 130.0f, stepY = 80.0f;
-    for (int ring = 1; ring < 7; ring++) {
-        for (int dx = -ring; dx <= ring; dx++) {
-            for (int dy = -ring; dy <= ring; dy++) {
-                if (abs(dx) != ring && abs(dy) != ring) continue;
-                Vector2 pos = { basePos.x + dx * stepX, basePos.y + dy * stepY };
-                candidate = (Rectangle){ pos.x - 10, pos.y - 10, 120, 70 };
-                if (!IsNodeOverlap(candidate)) return pos;
-            }
-        }
+    Rectangle cand = { basePos.x - 10, basePos.y - 10, 120, 70 }; if (!IsNodeOverlap(cand)) return basePos;
+    float sX = 130.0f, sY = 80.0f;
+    for (int r = 1; r < 7; r++) for (int dx = -r; dx <= r; dx++) for (int dy = -r; dy <= r; dy++) {
+        if (abs(dx) != r && abs(dy) != r) continue;
+        Vector2 p = { basePos.x + dx * sX, basePos.y + dy * sY }; cand = (Rectangle){ p.x - 10, p.y - 10, 120, 70 };
+        if (!IsNodeOverlap(cand)) return p;
     }
     return basePos;
-}
-
-static Vector2 QuadraticBezier(Vector2 p0, Vector2 p1, Vector2 p2, float t) {
-    float u = 1.0f - t;
-    Vector2 a = Vector2Scale(p0, u * u), b = Vector2Scale(p1, 2.0f * u * t), c = Vector2Scale(p2, t * t);
-    return Vector2Add(Vector2Add(a, b), c);
-}
-
-static void DrawCurvedArrow(Vector2 start, Vector2 end, Color color, float pct) {
-    if (pct <= 0.0f) return;
-    Vector2 control = { (start.x + end.x) / 2.0f, fminf(start.y, end.y) - 60.0f };
-    Vector2 prev = start, secondToLast = start;
-    int totalSteps = 20;
-    int visibleSteps = (int)((float)totalSteps * pct);
-    if (visibleSteps < 1) visibleSteps = 1;
-    for (int i = 1; i <= visibleSteps; i++) {
-        float t = (float)i / (float)totalSteps;
-        Vector2 point = QuadraticBezier(start, control, end, t);
-        DrawLineEx(prev, point, 3.0f, color); secondToLast = prev; prev = point;
-    }
-    if (pct >= 0.95f) {
-        Vector2 dir = Vector2Normalize(Vector2Subtract(end, secondToLast));
-        Vector2 side = { -dir.y, dir.x };
-        float length = 18.0f, width = 10.0f;
-        Vector2 base = Vector2Subtract(end, Vector2Scale(dir, length));
-        Vector2 p1 = Vector2Add(base, Vector2Scale(side, width)), p2 = Vector2Subtract(base, Vector2Scale(side, width));
-        DrawTriangle(end, p2, p1, color); DrawLineEx(end, p1, 1.0f, color); DrawLineEx(end, p2, 1.0f, color);
-    }
 }
 
 static void DrawStraightArrow(Vector2 start, Vector2 end, Color color, float pct) {
@@ -126,18 +159,15 @@ static void DrawStraightArrow(Vector2 start, Vector2 end, Color color, float pct
     Vector2 currentEnd = Vector2Add(start, Vector2Scale(Vector2Subtract(end, start), pct));
     DrawLineEx(start, currentEnd, 3.0f, color);
     if (pct >= 0.95f) {
-        Vector2 dir = Vector2Normalize(Vector2Subtract(end, start));
-        Vector2 side = { -dir.y, dir.x };
-        float length = 18.0f, width = 10.0f;
-        Vector2 base = Vector2Subtract(end, Vector2Scale(dir, length));
-        Vector2 p1 = Vector2Add(base, Vector2Scale(side, width)), p2 = Vector2Subtract(base, Vector2Scale(side, width));
+        Vector2 dir = Vector2Normalize(Vector2Subtract(end, start)); Vector2 side = { -dir.y, dir.x };
+        float len = 18.0f, wid = 10.0f; Vector2 base = Vector2Subtract(end, Vector2Scale(dir, len));
+        Vector2 p1 = Vector2Add(base, Vector2Scale(side, wid)), p2 = Vector2Subtract(base, Vector2Scale(side, wid));
         DrawTriangle(end, p2, p1, color); DrawLineEx(end, p1, 1.0f, color); DrawLineEx(end, p2, 1.0f, color);
     }
 }
 
 static void DrawStackPointerBox(const char* label, Rectangle box, Vector2 tipPos, Color color, bool showNull, float pct) {
-    DrawRectangleRec(box, WHITE); DrawRectangleLinesEx(box, 1, color);
-    DrawText(label, box.x + 6, box.y + 4, 12, color);
+    DrawRectangleRec(box, WHITE); DrawRectangleLinesEx(box, 1, color); DrawText(label, box.x + 6, box.y + 4, 12, color);
     Vector2 arrowEnd = tipPos; if (showNull) arrowEnd.x -= 25.0f;
     DrawStraightArrow((Vector2){ box.x + box.width, box.y + box.height / 2.0f }, arrowEnd, color, pct);
     if (showNull && pct >= 0.95f) {
@@ -148,12 +178,11 @@ static void DrawStackPointerBox(const char* label, Rectangle box, Vector2 tipPos
 }
 
 static Vector2 GetNodeLeftCenterScreen(VisualNode* vn) { Vector2 leftCenter = { vn->position.x, vn->position.y + 25 }; return GetWorldToScreen2D(leftCenter, viewCamera); }
-static Vector2 GetPointerFieldCenterScreen(VisualNode* vn) { return GetWorldToScreen2D((Vector2){ vn->position.x + 75, vn->position.y + 25 }, viewCamera); }
 
 static void DrawPseudocode(int x, int y, const char** lines, int count, int currentLine) {
     Rectangle bg = { (float)x - 10, (float)y - 10, 320, (float)count * 20 + 20 };
     DrawRectangleRec(bg, (Color){ 235, 245, 255, 255 }); DrawRectangleLinesEx(bg, 1, DARKBLUE);
-    DrawText("ALGORITHM (INSTRUCTION SET)", x, y - 25, 12, DARKBLUE);
+    DrawText("ALGORITHM", x, y - 25, 12, DARKBLUE);
     for (int i = 0; i < count; i++) {
         Color textColor = (Color){ 30, 60, 90, 255 };
         if (i == currentLine) { DrawRectangle(x - 5, y + i * 20, 310, 18, (Color){ 255, 255, 0, 150 }); textColor = RED; }
@@ -161,11 +190,9 @@ static void DrawPseudocode(int x, int y, const char** lines, int count, int curr
     }
 }
 
-// --- Logic ---
-
 void QueueVisualizer_Init(void) {
     MemoryManager_Init(); front_address = rear_address = 0; visualNodeCount = 0; spawnCenter = (Vector2){ 0, 0 }; viewCamera = (Camera2D){ 0 };
-    qStatus = Q_IDLE; ctx.type = Q_FUNC_NONE; ctx.currentLine = 0; ctx.lineProgress = 1.0f;
+    qStatus = Q_IDLE; ctx.type = Q_FUNC_NONE; ctx.currentLine = 0; ctx.logicalStep = 0; ctx.lineProgress = 1.0f; ctx.practiceMode = false; ctx.newNodeAddress = 0; ctx.toDeleteAddress = 0; showError = false;
 }
 
 void QueueVisualizer_Update(Vector2 mouseWorldPos, float zoom) {
@@ -175,31 +202,11 @@ void QueueVisualizer_Update(Vector2 mouseWorldPos, float zoom) {
         visualNodes[i].position.y += (visualNodes[i].targetPosition.y - visualNodes[i].position.y) * 0.15f;
     }
     if (ctx.lineProgress < 1.0f) { ctx.lineProgress += GetFrameTime() * 2.5f; if (ctx.lineProgress > 1.0f) ctx.lineProgress = 1.0f; }
-
     if (qStatus != Q_IDLE && qStatus != Q_EXECUTING) return;
-
-    static int draggingIdx = -1;
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-        for (int i = visualNodeCount - 1; i >= 0; i--) {
-            Rectangle bounds = { visualNodes[i].position.x, visualNodes[i].position.y, 100, 50 };
-            if (CheckCollisionPointRec(mouseWorldPos, bounds)) {
-                draggingIdx = i;
-                visualNodes[i].isDragging = true;
-                break;
-            }
-        }
-    }
-    if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
-        if (draggingIdx != -1) {
-            visualNodes[draggingIdx].isDragging = false;
-            visualNodes[draggingIdx].targetPosition = visualNodes[draggingIdx].position;
-        }
-        draggingIdx = -1;
-    }
-    if (draggingIdx != -1) {
-        visualNodes[draggingIdx].position = mouseWorldPos;
-        visualNodes[draggingIdx].targetPosition = mouseWorldPos;
-    }
+    static int dragIdx = -1;
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) for (int i = visualNodeCount - 1; i >= 0; i--) if (CheckCollisionPointRec(mouseWorldPos, (Rectangle){ visualNodes[i].position.x, visualNodes[i].position.y, 100, 50 })) { dragIdx = i; visualNodes[i].isDragging = true; break; }
+    if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) { if (dragIdx != -1) { visualNodes[dragIdx].isDragging = false; visualNodes[dragIdx].targetPosition = visualNodes[dragIdx].position; } dragIdx = -1; }
+    if (dragIdx != -1) { visualNodes[dragIdx].position = mouseWorldPos; visualNodes[dragIdx].targetPosition = mouseWorldPos; }
 }
 
 void QueueVisualizer_NextStep(void) {
@@ -207,14 +214,11 @@ void QueueVisualizer_NextStep(void) {
     if (ctx.type == Q_FUNC_ENQUEUE) {
         switch (ctx.currentLine) {
             case 0: ctx.newNodeAddress = MemoryManager_Malloc(0); if (ctx.newNodeAddress != -1) {
-                    Vector2 tp = FindSpawnPosition(spawnCenter);
-                    visualNodes[visualNodeCount].address = ctx.newNodeAddress; visualNodes[visualNodeCount].position = (Vector2){ tp.x, tp.y - 100 };
-                    visualNodes[visualNodeCount].targetPosition = tp; visualNodes[visualNodeCount].data = 0; 
-                    visualNodes[visualNodeCount].color = (Color){ (unsigned char)GetRandomValue(50, 200), (unsigned char)GetRandomValue(50, 200), (unsigned char)GetRandomValue(50, 200), 255 };
-                    visualNodeCount++; ctx.currentLine = 1;
+                    Vector2 tp = FindSpawnPosition(spawnCenter); visualNodes[visualNodeCount].address = ctx.newNodeAddress; visualNodes[visualNodeCount].position = (Vector2){ tp.x, tp.y - 100 };
+                    visualNodes[visualNodeCount].targetPosition = tp; visualNodes[visualNodeCount].data = 0; visualNodes[visualNodeCount].color = (Color){ (unsigned char)GetRandomValue(50, 200), (unsigned char)GetRandomValue(50, 200), (unsigned char)GetRandomValue(50, 200), 255 }; visualNodeCount++; ctx.currentLine = 1;
                 } break;
             case 1: { MemoryNode* n = MemoryManager_GetNode(ctx.newNodeAddress); if (n) n->value = ctx.targetVal; VisualNode* vn = GetVisualNode(ctx.newNodeAddress); if (vn) vn->data = (char)ctx.targetVal; ctx.currentLine = 2; } break;
-            case 2: ctx.currentLine = 3; break; // temp->next = NULL (already handled by malloc)
+            case 2: ctx.currentLine = 3; break;
             case 3: if (rear_address == 0) ctx.currentLine = 4; else ctx.currentLine = 6; break;
             case 4: front_address = rear_address = ctx.newNodeAddress; ctx.newNodeAddress = 0; qStatus = Q_IDLE; break;
             case 5: ctx.currentLine = 6; break;
@@ -236,8 +240,8 @@ void QueueVisualizer_NextStep(void) {
 void QueueVisualizer_Draw(void) {
     for (int i = 0; i < visualNodeCount; i++) {
         VisualNode* vn = &visualNodes[i]; Rectangle rec = { vn->position.x, vn->position.y, 100, 50 };
-        Color bc = vn->color; if (vn->address == ctx.newNodeAddress) bc = (Color){ 200, 255, 200, 255 }; if (vn->address == ctx.toDeleteAddress) bc = (Color){ 255, 200, 200, 255 };
-        DrawRectangleRec(rec, bc); DrawRectangleLinesEx(rec, 2, DARKGREEN);
+        Color bg = vn->color; if (vn->address == ctx.newNodeAddress) bg = (Color){ 200, 255, 200, 255 }; if (vn->address == ctx.toDeleteAddress) bg = (Color){ 255, 200, 200, 255 };
+        DrawRectangleRec(rec, bg); DrawRectangleLinesEx(rec, 2, DARKGREEN);
         DrawLineEx((Vector2){ vn->position.x + 50, vn->position.y }, (Vector2){ vn->position.x + 50, vn->position.y + 50 }, 1, DARKGREEN);
         char val[4]; sprintf(val, "%d", (int)vn->data); DrawText(val, vn->position.x + 15, vn->position.y + 15, 15, WHITE);
         DrawCircle(vn->position.x + 75, vn->position.y + 25, 3, WHITE);
@@ -249,8 +253,8 @@ void QueueVisualizer_Draw(void) {
         if (vn && n->next_address != 0) {
             VisualNode* nv = GetVisualNode(n->next_address);
             if (nv) {
-                float pg = (qStatus == Q_EXECUTING && cur == rear_address && ctx.currentLine == 6) ? ctx.lineProgress : 1.0f;
-                DrawCurvedArrow((Vector2){ vn->position.x + 75, vn->position.y + 25 }, (Vector2){ nv->position.x, nv->position.y + 25 }, BLACK, pg);
+                float pg = (qStatus == Q_EXECUTING && ctx.type == Q_FUNC_ENQUEUE && cur == rear_address && ctx.currentLine == 6) ? ctx.lineProgress : 1.0f;
+                DrawStraightArrow((Vector2){ vn->position.x + 75, vn->position.y + 25 }, (Vector2){ nv->position.x, nv->position.y + 25 }, BLACK, pg);
             }
         } cur = MemoryManager_GetNode(cur)->next_address;
     }
@@ -269,11 +273,9 @@ void QueueVisualizer_DrawUI(void) {
 
     Rectangle sb = { 20, (float)sh/2 - 110, 240, 220 }; DrawRectangleRec(sb, (Color){ 255, 245, 230, 255 }); DrawRectangleLinesEx(sb, 2, (Color){ 255, 161, 0, 255 });
     DrawText("THE STACK", sb.x + 10, sb.y + 10, 14, (Color){ 200, 100, 0, 255 });
-    
     Rectangle fb = { sb.x + 40, sb.y + 60, 160, 35 }, rb = { sb.x + 40, sb.y + 140, 160, 35 };
     DrawRectangleRec(fb, WHITE); DrawRectangleLinesEx(fb, 1, BLACK); DrawText("front (ptr)", fb.x + 55, fb.y + 10, 13, BLACK);
     DrawRectangleRec(rb, WHITE); DrawRectangleLinesEx(rb, 1, BLACK); DrawText("rear (ptr)", rb.x + 55, rb.y + 10, 13, BLACK);
-    
     VisualNode* fn = GetVisualNode(front_address); VisualNode* rn = GetVisualNode(rear_address);
     if (fn) DrawStraightArrow((Vector2){ fb.x + fb.width, fb.y + fb.height / 2.0f }, GetNodeLeftCenterScreen(fn), BLACK, 1.0f);
     else DrawStackPointerBox("front", fb, (Vector2){ fb.x + fb.width + 100, fb.y + fb.height / 2.0f }, BLACK, true, 1.0f);
@@ -281,31 +283,57 @@ void QueueVisualizer_DrawUI(void) {
     else DrawStackPointerBox("rear", rb, (Vector2){ rb.x + rb.width + 100, rb.y + rb.height / 2.0f }, BLACK, true, 1.0f);
 
     if (qStatus == Q_EXECUTING) {
-        if (ctx.type == Q_FUNC_ENQUEUE) DrawPseudocode(sw - 580, 60, enqueuePseudocode, 9, ctx.currentLine);
-        else DrawPseudocode(sw - 580, 60, dequeuePseudocode, 5, ctx.currentLine);
+        if (!ctx.practiceMode) {
+            if (ctx.type == Q_FUNC_ENQUEUE) DrawPseudocode(sw - 580, 60, enqueuePseudocode, 9, ctx.currentLine);
+            else DrawPseudocode(sw - 580, 60, dequeuePseudocode, 5, ctx.currentLine);
+        } else {
+            const char* goal = ""; AlgAction req = GetRequiredAction();
+            if (ctx.type == Q_FUNC_ENQUEUE) {
+                switch(ctx.logicalStep) { case 0: goal="Step 1: Allocate node."; break; case 1: goal="Step 2: Set data."; break; case 2: goal="Step 3: Update pointers."; break; default: goal="Done!"; break; }
+            } else {
+                switch(ctx.logicalStep) { case 0: goal="Step 1: Update pointers."; break; case 1: goal="Step 2: Free memory."; break; default: goal="Done!"; break; }
+            }
+            DrawLogicDiagram(sw - 580, 60, goal, req);
+        }
     }
+
     DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY);
+    GuiCheckBox((Rectangle){ 130, (float)sh - 100, 20, 20 }, "PRACTICE", &ctx.practiceMode);
     if (GuiButton((Rectangle){ 50, (float)sh - 80, 120, 45 }, "Enqueue")) qStatus = Q_INPUT_PARAMS, ctx.type = Q_FUNC_ENQUEUE;
-    if (GuiButton((Rectangle){ 180, (float)sh - 80, 120, 45 }, "Dequeue")) { ctx.type = Q_FUNC_DEQUEUE; ctx.currentLine = 0; qStatus = Q_EXECUTING; }
+    if (GuiButton((Rectangle){ 180, (float)sh - 80, 120, 45 }, "Dequeue")) { ctx.type = Q_FUNC_DEQUEUE; ctx.currentLine = 0; ctx.logicalStep = 0; qStatus = Q_EXECUTING; }
+    
     if (qStatus == Q_EXECUTING) {
-        if (GuiButton((Rectangle){ 400, (float)sh - 80, 200, 45 }, "NEXT STEP")) QueueVisualizer_NextStep();
-        if (GuiButton((Rectangle){ 610, (float)sh - 80, 100, 45 }, "CANCEL")) QueueVisualizer_CancelInteraction();
+        if (!ctx.practiceMode) { if (GuiButton((Rectangle){ 400, (float)sh - 80, 200, 45 }, "NEXT STEP")) QueueVisualizer_NextStep(); }
+        else {
+            float bx = 400;
+            if (ctx.type == Q_FUNC_ENQUEUE) {
+                if (GuiButton((Rectangle){ bx, (float)sh - 80, 90, 45 }, "Malloc")) TryExecuteAction(ACT_MALLOC);
+                if (GuiButton((Rectangle){ bx + 95, (float)sh - 80, 90, 45 }, "Assign")) TryExecuteAction(ACT_ASSIGN);
+                if (GuiButton((Rectangle){ bx + 190, (float)sh - 80, 90, 45 }, "Link")) TryExecuteAction(ACT_LINK);
+            } else {
+                if (GuiButton((Rectangle){ bx, (float)sh - 80, 90, 45 }, "Link")) TryExecuteAction(ACT_LINK);
+                if (GuiButton((Rectangle){ bx + 95, (float)sh - 80, 90, 45 }, "Free")) TryExecuteAction(ACT_FREE);
+            }
+        }
+        if (GuiButton((Rectangle){ sw - 150, (float)sh - 80, 100, 45 }, "CANCEL")) QueueVisualizer_CancelInteraction();
     }
     if (qStatus == Q_INPUT_PARAMS) {
-        Rectangle pb = { (float)sw/2 - 170, (float)sh/2 - 110, 340, 180 };
-        DrawRectangleRec(pb, WHITE); DrawRectangleLinesEx(pb, 2, BLACK);
-        DrawText("ENQUEUE(Q, val)", pb.x + 80, pb.y + 20, 15, BLACK);
-        DrawText("Value:", pb.x + 30, pb.y + 70, 12, BLACK);
+        Rectangle pb = { (float)sw/2 - 170, (float)sh/2 - 110, 340, 180 }; DrawRectangleRec(pb, WHITE); DrawRectangleLinesEx(pb, 2, BLACK);
+        DrawText("ENQUEUE", pb.x + 140, pb.y + 20, 15, BLACK); DrawText("Value:", pb.x + 30, pb.y + 70, 12, BLACK);
         if (GuiTextBox((Rectangle){pb.x + 120, pb.y + 65, 160, 30}, valBuf, 8, valEditMode)) valEditMode = !valEditMode;
-        if (GuiButton((Rectangle){pb.x + 120, pb.y + 120, 100, 35}, "START")) { ctx.targetVal = atoi(valBuf); valEditMode = false; ctx.currentLine = 0; qStatus = Q_EXECUTING; }
+        if (GuiButton((Rectangle){pb.x + 120, pb.y + 120, 100, 35}, "START")) { ctx.targetVal = atoi(valBuf); ctx.currentLine = 0; ctx.logicalStep = 0; qStatus = Q_EXECUTING; }
+    }
+    if (showError) {
+        Rectangle eb = { (float)sw/2 - 200, (float)sh/2 - 50, 400, 120 }; DrawRectangleRec(eb, WHITE); DrawRectangleLinesEx(eb, 4, BLACK);
+        DrawText("LOGIC ERROR", eb.x + 130, eb.y + 20, 18, BLACK); DrawText(errorMsg, eb.x + 20, eb.y + 55, 12, BLACK);
+        if (GuiButton((Rectangle){eb.x + 150, eb.y + 80, 100, 30}, "OK")) showError = false;
     }
 }
-
 void QueueVisualizer_SetSpawnCenter(Vector2 center) { spawnCenter = center; }
 void QueueVisualizer_SetCamera(Camera2D cam) { viewCamera = cam; }
 int QueueVisualizer_GetTraversalAddress(void) { return 0; }
 bool QueueVisualizer_IsBusy(void) { return qStatus != Q_IDLE; }
 void QueueVisualizer_CancelInteraction(void) {
     if (ctx.type == Q_FUNC_ENQUEUE && ctx.newNodeAddress != 0) { MemoryManager_Free(ctx.newNodeAddress); RemoveVisualNode(ctx.newNodeAddress); }
-    qStatus = Q_IDLE; ctx.type = Q_FUNC_NONE; ctx.newNodeAddress = 0; ctx.toDeleteAddress = 0;
+    qStatus = Q_IDLE; ctx.type = Q_FUNC_NONE; ctx.newNodeAddress = 0; ctx.toDeleteAddress = 0; ctx.logicalStep = 0;
 }

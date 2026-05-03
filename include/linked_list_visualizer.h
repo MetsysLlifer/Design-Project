@@ -65,6 +65,7 @@ typedef struct {
     int newNodeAddress;
     int currentLine;
     int totalLines;
+    int logicalStep;
     float lineProgress;
     bool practiceMode;
 } SimContext;

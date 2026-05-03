@@ -79,7 +79,6 @@ static bool delPosEditMode = false;
 
 static Vector2 FindSpawnPosition(Vector2 basePos);
 static void RemoveVisualNode(int address);
-
 void LinkedListVisualizer_Init(void) {
     MemoryManager_Init();
     head_address = 0;
@@ -96,7 +95,9 @@ void LinkedListVisualizer_Init(void) {
     context.newNodeAddress = 0;
     context.currentLine = 0;
     context.totalLines = 0;
+    context.logicalStep = 0;
     context.lineProgress = 1.0f;
+    context.practiceMode = false;
     showError = false;
 }
 
@@ -122,40 +123,151 @@ static void ResetTraversal(void) {
     }
 }
 
+static void DrawLogicDiagram(int x, int y, const char* goal, AlgAction iconType) {
+    Rectangle bg = { (float)x - 10, (float)y - 10, 320, 150 };
+    DrawRectangleRec(bg, (Color){ 255, 255, 240, 255 }); // Creamy paper look
+    DrawRectangleLinesEx(bg, 2, DARKGRAY);
+    DrawText("LOGIC GOAL", x + 10, y, 14, BLACK);
+
+    // Draw simplified icon based on goal
+    Rectangle iconArea = { (float)x + 110, (float)y + 40, 80, 50 };
+    switch (iconType) {
+        case ACT_MALLOC:
+            DrawRectangleLinesEx(iconArea, 2, DARKGREEN);
+            DrawText("+", iconArea.x + 35, iconArea.y + 15, 20, DARKGREEN);
+            break;
+        case ACT_ASSIGN:
+            DrawRectangleLinesEx(iconArea, 2, DARKGREEN);
+            DrawText("DATA", iconArea.x + 20, iconArea.y + 15, 15, DARKGREEN);
+            break;
+        case ACT_TRAVERSE:
+            DrawLineEx((Vector2){iconArea.x, iconArea.y + 25}, (Vector2){iconArea.x + 70, iconArea.y + 25}, 3, BLACK);
+            DrawTriangle((Vector2){iconArea.x + 80, iconArea.y + 25}, (Vector2){iconArea.x + 65, iconArea.y + 15}, (Vector2){iconArea.x + 65, iconArea.y + 35}, BLACK);
+            break;
+        case ACT_LINK:
+            DrawCircle(iconArea.x + 10, iconArea.y + 25, 5, BLACK);
+            DrawLineEx((Vector2){iconArea.x + 10, iconArea.y + 25}, (Vector2){iconArea.x + 70, iconArea.y + 25}, 2, BLACK);
+            DrawCircle(iconArea.x + 70, iconArea.y + 25, 5, BLACK);
+            break;
+        case ACT_FREE:
+            DrawRectangleLinesEx(iconArea, 2, RED);
+            DrawLine(iconArea.x, iconArea.y, iconArea.x + iconArea.width, iconArea.y + iconArea.height, RED);
+            DrawLine(iconArea.x + iconArea.width, iconArea.y, iconArea.x, iconArea.y + iconArea.height, RED);
+            break;
+        default: break;
+    }
+
+    DrawText(goal, x + 10, y + 110, 13, DARKGRAY);
+}
+
 static AlgAction GetRequiredAction(void) {
-    if (context.type == FUNC_INSERT) {
-        switch (context.currentLine) {
-            case 0: return ACT_MALLOC;
-            case 1: return ACT_ASSIGN;
-            case 2:
-            case 5:
-            case 7: return ACT_LOGIC;
-            case 3:
-            case 4:
-            case 9:
-            case 10: return ACT_LINK;
-            case 6:
-            case 8: return ACT_TRAVERSE;
-            default: return ACT_NONE;
+    if (!context.practiceMode) {
+        // ... (existing line-based logic for auto-step)
+        if (context.type == FUNC_INSERT) {
+            switch (context.currentLine) {
+                case 0: return ACT_MALLOC;
+                case 1: return ACT_ASSIGN;
+                case 2: case 5: case 7: return ACT_LOGIC;
+                case 3: case 4: case 9: case 10: return ACT_LINK;
+                case 6: case 8: return ACT_TRAVERSE;
+                default: return ACT_NONE;
+            }
+        } else if (context.type == FUNC_DELETE) {
+            switch (context.currentLine) {
+                case 0: case 1: case 5: case 7: return ACT_LOGIC;
+                case 2: case 3: case 9: case 10: return ACT_LINK;
+                case 4: case 11: return ACT_FREE;
+                case 6: case 8: return ACT_TRAVERSE;
+                default: return ACT_NONE;
+            }
         }
-    } else if (context.type == FUNC_DELETE) {
-        switch (context.currentLine) {
-            case 0:
-            case 1:
-            case 5:
-            case 7: return ACT_LOGIC;
-            case 2:
-            case 3:
-            case 9:
-            case 10: return ACT_LINK;
-            case 4:
-            case 11: return ACT_FREE;
-            case 6:
-            case 8: return ACT_TRAVERSE;
-            default: return ACT_NONE;
+    } else {
+        // PRACTICE MODE GOALS
+        if (context.type == FUNC_INSERT) {
+            switch (context.logicalStep) {
+                case 0: return ACT_MALLOC;
+                case 1: return ACT_ASSIGN;
+                case 2: return ACT_TRAVERSE;
+                case 3: return ACT_LINK;
+                default: return ACT_NONE;
+            }
+        } else if (context.type == FUNC_DELETE) {
+            switch (context.logicalStep) {
+                case 0: return ACT_TRAVERSE;
+                case 1: return ACT_LINK;
+                case 2: return ACT_FREE;
+                default: return ACT_NONE;
+            }
         }
     }
     return ACT_NONE;
+}
+
+static void TryExecuteAction(AlgAction selected) {
+    AlgAction required = GetRequiredAction();
+    if (required == ACT_NONE) return;
+
+    if (selected == required) {
+        if (context.type == FUNC_INSERT) {
+            switch (context.logicalStep) {
+                case 0: // Malloc
+                    while (context.currentLine != 1) LinkedListVisualizer_NextStep();
+                    context.logicalStep = 1; break;
+                case 1: // Assign
+                    while (context.currentLine != 2) LinkedListVisualizer_NextStep();
+                    context.logicalStep = 2; break;
+                case 2: // Traverse
+                    if (context.currentPos < context.targetPos - 1) {
+                        // Keep traversing until we hit the 'for' exit
+                        LinkedListVisualizer_NextStep(); 
+                        // Auto-advance internal loop logic
+                        while (context.currentLine == 7 || context.currentLine == 8) {
+                            if (context.currentLine == 7 && context.currentPos >= context.targetPos - 1) break;
+                            LinkedListVisualizer_NextStep();
+                        }
+                    } else {
+                        // Finished traversal
+                        while (context.currentLine < 9) LinkedListVisualizer_NextStep();
+                        context.logicalStep = 3;
+                    }
+                    break;
+                case 3: // Link
+                    while (simStatus == SIM_EXECUTING) LinkedListVisualizer_NextStep();
+                    context.logicalStep = 4; break;
+            }
+        } else if (context.type == FUNC_DELETE) {
+            switch (context.logicalStep) {
+                case 0: // Traverse
+                    if (context.currentPos < context.targetPos - 1) {
+                        LinkedListVisualizer_NextStep();
+                        while (context.currentLine == 7 || context.currentLine == 8) {
+                            if (context.currentLine == 7 && context.currentPos >= context.targetPos - 1) break;
+                            LinkedListVisualizer_NextStep();
+                        }
+                    } else {
+                        while (context.currentLine < 9) LinkedListVisualizer_NextStep();
+                        context.logicalStep = 1;
+                    }
+                    break;
+                case 1: // Link
+                    while (context.currentLine < 11) LinkedListVisualizer_NextStep();
+                    context.logicalStep = 2; break;
+                case 2: // Free
+                    while (simStatus == SIM_EXECUTING) LinkedListVisualizer_NextStep();
+                    context.logicalStep = 3; break;
+            }
+        }
+    } else {
+        showError = true;
+        switch (required) {
+            case ACT_MALLOC: sprintf(errorMsg, "LOGIC ERROR: Create the node object first."); break;
+            case ACT_ASSIGN: sprintf(errorMsg, "LOGIC ERROR: Fill the node with data."); break;
+            case ACT_TRAVERSE: sprintf(errorMsg, "LOGIC ERROR: Move to the correct insertion/deletion point."); break;
+            case ACT_LINK: sprintf(errorMsg, "LOGIC ERROR: Update the pointer connections."); break;
+            case ACT_FREE: sprintf(errorMsg, "LOGIC ERROR: Release the memory for the removed node."); break;
+            default: sprintf(errorMsg, "INVALID STEP: Please check the logical diagram."); break;
+        }
+    }
 }
 
 static VisualNode* GetVisualNode(int address) {
@@ -693,6 +805,7 @@ void LinkedListVisualizer_CancelInteraction(void) {
     context.prevAddress = 0;
     context.toDeleteAddress = 0;
     context.newNodeAddress = 0;
+    context.logicalStep = 0;
     curr_address = 0;
     showError = false;
 }
@@ -785,17 +898,42 @@ void LinkedListVisualizer_DrawUI(void) {
     char currTxt[32]; sprintf(currTxt, "curr: 0x%X", curr_address);
     DrawText(currTxt, stackBox.x + 20, stackBox.y + 145, 13, (Color){ 150, 80, 0, 255 });
 
-    // Pseudocode Display - Upper left of memory
+    // Pseudocode / Logic Diagram Display
     if (simStatus == SIM_EXECUTING) {
-        if (context.type == FUNC_INSERT) {
-            DrawPseudocode(sw - 580, 60, insertPseudocode, 12, context.currentLine);
-        } else if (context.type == FUNC_DELETE) {
-            DrawPseudocode(sw - 580, 60, deletePseudocode, 13, context.currentLine);
+        if (!context.practiceMode) {
+            if (context.type == FUNC_INSERT) {
+                DrawPseudocode(sw - 580, 60, insertPseudocode, 12, context.currentLine);
+            } else if (context.type == FUNC_DELETE) {
+                DrawPseudocode(sw - 580, 60, deletePseudocode, 13, context.currentLine);
+            }
+        } else {
+            // Logic Diagram Panel
+            const char* goal = "";
+            AlgAction required = GetRequiredAction();
+            if (context.type == FUNC_INSERT) {
+                switch (context.logicalStep) {
+                    case 0: goal = "Step 1: Create a new, unlinked node."; break;
+                    case 1: goal = "Step 2: Assign value to the new node."; break;
+                    case 2: goal = "Step 3: Move traversal to insertion point."; break;
+                    case 3: goal = "Step 4: Connect node to the neighbors."; break;
+                    default: goal = "Task completed!"; break;
+                }
+            } else if (context.type == FUNC_DELETE) {
+                switch (context.logicalStep) {
+                    case 0: goal = "Step 1: Traverse to the target node."; break;
+                    case 1: goal = "Step 2: Relink neighbors to bypass node."; break;
+                    case 2: goal = "Step 3: Release the node's heap memory."; break;
+                    default: goal = "Task completed!"; break;
+                }
+            }
+            DrawLogicDiagram(sw - 580, 60, goal, required);
         }
     }
 
     // 2. Bottom Function Pills
     DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY);
+    GuiCheckBox((Rectangle){ 130, (float)sh - 100, 20, 20 }, "PRACTICE", &context.practiceMode);
+
     Rectangle insBtn = { 50, (float)sh - 80, 120, 45 };
     Rectangle delBtn = { 180, (float)sh - 80, 120, 45 };
     
@@ -810,13 +948,23 @@ void LinkedListVisualizer_DrawUI(void) {
 
     // 3. Conditional Function Keys (Bottom Right/Center)
     if (simStatus == SIM_EXECUTING) {
-        DrawText("ALGORITHM STEPS", 400, sh - 100, 11, DARKGRAY);
-        Rectangle nextKey = { 400, (float)sh - 80, 200, 45 };
-        if (GuiButton(nextKey, "NEXT STEP")) {
-            LinkedListVisualizer_NextStep();
+        if (!context.practiceMode) {
+            DrawText("ALGORITHM STEPS", 400, sh - 100, 11, DARKGRAY);
+            Rectangle nextKey = { 400, (float)sh - 80, 200, 45 };
+            if (GuiButton(nextKey, "NEXT STEP")) {
+                LinkedListVisualizer_NextStep();
+            }
+        } else {
+            DrawText("PRACTICE ACTIONS", 400, sh - 100, 11, DARKGRAY);
+            float bx = 400;
+            if (GuiButton((Rectangle){ bx, (float)sh - 80, 90, 45 }, "Malloc")) TryExecuteAction(ACT_MALLOC);
+            if (GuiButton((Rectangle){ bx + 95, (float)sh - 80, 90, 45 }, "Assign")) TryExecuteAction(ACT_ASSIGN);
+            if (GuiButton((Rectangle){ bx + 190, (float)sh - 80, 90, 45 }, "Traverse")) TryExecuteAction(ACT_TRAVERSE);
+            if (GuiButton((Rectangle){ bx + 285, (float)sh - 80, 90, 45 }, "Link")) TryExecuteAction(ACT_LINK);
+            if (GuiButton((Rectangle){ bx + 380, (float)sh - 80, 90, 45 }, "Free")) TryExecuteAction(ACT_FREE);
         }
         
-        Rectangle cancelKey = { 610, (float)sh - 80, 100, 45 };
+        Rectangle cancelKey = { sw - 150, (float)sh - 80, 100, 45 };
         if (GuiButton(cancelKey, "CANCEL")) {
             LinkedListVisualizer_CancelInteraction();
         }
@@ -910,6 +1058,7 @@ void LinkedListVisualizer_DrawUI(void) {
                 ResetTraversal();
                 context.currentLine = 0;
                 context.totalLines = 12;
+                context.logicalStep = 0;
                 simStatus = SIM_EXECUTING;
             }
         } else if (context.type == FUNC_DELETE) {
@@ -943,6 +1092,7 @@ void LinkedListVisualizer_DrawUI(void) {
                 if (!showError) {
                     context.currentLine = 0;
                     context.totalLines = 13;
+                    context.logicalStep = 0;
                     simStatus = SIM_EXECUTING;
                 }
             }
