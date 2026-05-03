@@ -932,7 +932,7 @@ void LinkedListVisualizer_DrawUI(void) {
 
     // 2. Bottom Function Pills
     DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY);
-    GuiCheckBox((Rectangle){ 130, (float)sh - 100, 20, 20 }, "PRACTICE", &context.practiceMode);
+    GuiCheckBox((Rectangle){ 130, (float)sh - 105, 20, 20 }, "PRACTICE", &context.practiceMode);
 
     Rectangle insBtn = { 50, (float)sh - 80, 120, 45 };
     Rectangle delBtn = { 180, (float)sh - 80, 120, 45 };

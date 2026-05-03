@@ -285,7 +285,7 @@ void StackVisualizer_DrawUI(void) {
     }
 
     DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY);
-    GuiCheckBox((Rectangle){ 130, (float)sh - 100, 20, 20 }, "PRACTICE", &ctx.practiceMode);
+    GuiCheckBox((Rectangle){ 130, (float)sh - 105, 20, 20 }, "PRACTICE", &ctx.practiceMode);
     if (GuiButton((Rectangle){ 50, (float)sh - 80, 120, 45 }, "Push")) stackStatus = STACK_INPUT_PARAMS, ctx.type = STACK_FUNC_PUSH;
     if (GuiButton((Rectangle){ 180, (float)sh - 80, 120, 45 }, "Pop")) { ctx.type = STACK_FUNC_POP; ctx.currentLine = 0; ctx.logicalStep = 0; ctx.lineProgress = 0.0f; stackStatus = STACK_EXECUTING; }
     

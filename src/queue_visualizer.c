@@ -298,7 +298,7 @@ void QueueVisualizer_DrawUI(void) {
     }
 
     DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY);
-    GuiCheckBox((Rectangle){ 130, (float)sh - 100, 20, 20 }, "PRACTICE", &ctx.practiceMode);
+    GuiCheckBox((Rectangle){ 130, (float)sh - 105, 20, 20 }, "PRACTICE", &ctx.practiceMode);
     if (GuiButton((Rectangle){ 50, (float)sh - 80, 120, 45 }, "Enqueue")) qStatus = Q_INPUT_PARAMS, ctx.type = Q_FUNC_ENQUEUE;
     if (GuiButton((Rectangle){ 180, (float)sh - 80, 120, 45 }, "Dequeue")) { ctx.type = Q_FUNC_DEQUEUE; ctx.currentLine = 0; ctx.logicalStep = 0; qStatus = Q_EXECUTING; }
     

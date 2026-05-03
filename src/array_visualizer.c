@@ -374,7 +374,7 @@ void ArrayVisualizer_DrawUI(void) {
     }
 
     if (arrStatus == ARR_IDLE || arrStatus == ARR_INPUT_PARAMS) {
-        DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY); GuiCheckBox((Rectangle){ 130, (float)sh - 100, 20, 20 }, "PRACTICE", &ctx.practiceMode);
+        DrawText("FUNCTIONS", 50, sh - 100, 11, DARKGRAY); GuiCheckBox((Rectangle){ 130, (float)sh - 105, 20, 20 }, "PRACTICE", &ctx.practiceMode);
         if (GuiButton((Rectangle){ 50, (float)sh - 80, 120, 45 }, "Insert")) arrStatus = ARR_INPUT_PARAMS, ctx.type = ARR_FUNC_INSERT;
         if (GuiButton((Rectangle){ 180, (float)sh - 80, 120, 45 }, "Delete")) arrStatus = ARR_INPUT_PARAMS, ctx.type = ARR_FUNC_DELETE;
     }
